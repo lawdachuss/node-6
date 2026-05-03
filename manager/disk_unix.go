@@ -42,12 +42,30 @@ func getDiskStats(path string) (DiskStats, error) {
 	if err := syscall.Statfs(path, &stat); err != nil {
 		return DiskStats{}, fmt.Errorf("statfs %s: %w", path, err)
 	}
-	total := stat.Blocks * uint64(stat.Bsize)
-	free := stat.Bfree * uint64(stat.Bsize)
-	used := total - free
+	
+	// Bavail = blocks available to non-privileged users (actual usable space)
+	// This is what 'df -h' shows as "Available"
+	available := stat.Bavail * uint64(stat.Bsize)
+	
+	// For "Total", show available + used (not the entire filesystem)
+	// This gives a realistic view of usable space
+	totalFree := stat.Bfree * uint64(stat.Bsize)
+	totalBlocks := stat.Blocks * uint64(stat.Bsize)
+	used := totalBlocks - totalFree
+	
+	// Total usable = available + used
+	totalUsable := available + used
+	
 	var pct float64
-	if total > 0 {
-		pct = float64(used) / float64(total) * 100
+	if totalUsable > 0 {
+		pct = float64(used) / float64(totalUsable) * 100
 	}
-	return DiskStats{Path: path, Total: total, Used: used, Free: free, Percent: pct}, nil
+	
+	return DiskStats{
+		Path:    path,
+		Total:   totalUsable,
+		Used:    used,
+		Free:    available,
+		Percent: pct,
+	}, nil
 }
