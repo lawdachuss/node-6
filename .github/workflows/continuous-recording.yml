@@ -342,6 +342,10 @@ jobs:
           echo "🔄 Keeping session alive..."
           echo ""
           
+          # Setup trap for graceful shutdown on SIGTERM/SIGINT
+          trap 'echo ""; echo "⚠️  Received cancellation signal - initiating graceful shutdown..."; CANCELLED=true' SIGTERM SIGINT
+          CANCELLED=false
+          
           # Try to get tunnel URL again if not found earlier
           sleep 10
           TUNNEL_URL=$(grep -oP 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' tunnel.log | head -1)
@@ -368,7 +372,7 @@ jobs:
           LAST_CLEANUP=0
           LAST_CHANNEL_SYNC=0
           
-          while [ $(date +%s) -lt $END_TIME ]; do
+          while [ $(date +%s) -lt $END_TIME ] && [ "$CANCELLED" = false ]; do
             CURRENT_TIME=$(date +%s)
             
             # Check if container is still running
@@ -432,22 +436,39 @@ jobs:
             sleep 60
           done
           
+          # Determine shutdown reason
+          if [ "$CANCELLED" = true ]; then
+            echo ""
+            echo "╔════════════════════════════════════════════════════════════╗"
+            echo "║           ⚠️  WORKFLOW CANCELLED - SHUTTING DOWN           ║"
+            echo "╚════════════════════════════════════════════════════════════╝"
+            echo ""
+            echo "[INFO] Workflow cancelled at $(date)"
+          else
+            echo ""
+            echo "[INFO] 5-hour session completed at $(date)"
+          fi
+          
+          echo "[INFO] Initiating graceful shutdown..."
           echo ""
-          echo "[INFO] 5-hour session completed at $(date)"
-          echo "[INFO] Stopping services..."
           
           # Sync channels back to Supabase before stopping
           if [ -n "${{ secrets.SUPABASE_URL }}" ] && [ -n "${{ secrets.SUPABASE_API_KEY }}" ]; then
-            echo "[INFO] Syncing channels to Supabase before shutdown"
+            echo "💾 Syncing channels to Supabase before shutdown..."
             docker exec goondvr cat /usr/src/app/conf/channels.json > conf/channels.json 2>/dev/null || true
             export SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
             export SUPABASE_API_KEY="${{ secrets.SUPABASE_API_KEY }}"
             chmod +x scripts/sync-channels-to-supabase.sh
-            ./scripts/sync-channels-to-supabase.sh || echo "[WARN] Failed to sync channels"
+            ./scripts/sync-channels-to-supabase.sh && echo "✅ Channels synced" || echo "⚠️  Failed to sync channels"
           fi
           
-          # Stop Docker container
-          docker stop goondvr || true
+          # Give container time to finish current operations
+          echo "⏳ Waiting for container to finish current operations (30 seconds)..."
+          sleep 30
+          
+          # Stop Docker container gracefully
+          echo "🛑 Stopping Docker container gracefully..."
+          docker stop --time=60 goondvr 2>/dev/null && echo "✅ Container stopped gracefully" || echo "⚠️  Container stop failed"
           
           # Stop tunnel
           if [ -f tunnel.pid ]; then
@@ -566,40 +587,90 @@ jobs:
           echo "Database entries:"
           find database -type f -name "*.json" 2>/dev/null | wc -l | xargs echo "Total JSON files:"
       
-      - name: Cleanup
+      - name: Graceful shutdown and cleanup
         if: always()
         run: |
-          echo "🧹 Starting final cleanup..."
+          echo ""
+          echo "╔════════════════════════════════════════════════════════════╗"
+          echo "║              🧹 GRACEFUL SHUTDOWN & CLEANUP                ║"
+          echo "╚════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "⏰ Started at: $(date)"
+          echo ""
           
-          # Stop and remove Docker containers
-          echo "🐳 Stopping Docker containers..."
-          docker stop goondvr byparr 2>/dev/null || true
-          docker rm -f goondvr byparr 2>/dev/null || true
-          docker network rm recorder-network 2>/dev/null || true
+          # Step 1: Sync channels to Supabase (if not already done)
+          if [ -n "${{ secrets.SUPABASE_URL }}" ] && [ -n "${{ secrets.SUPABASE_API_KEY }}" ]; then
+            echo "💾 Step 1/6: Syncing channels to Supabase..."
+            if docker ps | grep -q goondvr; then
+              docker exec goondvr cat /usr/src/app/conf/channels.json > conf/channels.json 2>/dev/null || true
+            fi
+            export SUPABASE_URL="${{ secrets.SUPABASE_URL }}"
+            export SUPABASE_API_KEY="${{ secrets.SUPABASE_API_KEY }}"
+            chmod +x scripts/sync-channels-to-supabase.sh
+            ./scripts/sync-channels-to-supabase.sh && echo "✅ Channels synced" || echo "⚠️  Sync failed"
+          else
+            echo "⏭️  Step 1/6: Skipping Supabase sync (not configured)"
+          fi
+          echo ""
           
-          # Remove Docker images to free space
-          echo "🐳 Removing Docker images..."
-          docker rmi goondvr:latest 2>/dev/null || true
-          docker rmi ghcr.io/thephaseless/byparr:latest 2>/dev/null || true
-          docker rmi ghcr.io/flaresolverr/flaresolverr:latest 2>/dev/null || true
+          # Step 2: Stop Docker container gracefully
+          echo "🛑 Step 2/6: Stopping Docker container..."
+          if docker ps | grep -q goondvr; then
+            echo "  Sending SIGTERM to container (60 second timeout)..."
+            docker stop --time=60 goondvr 2>/dev/null && echo "✅ Container stopped gracefully" || echo "⚠️  Container stop failed"
+          else
+            echo "  Container already stopped"
+          fi
+          echo ""
           
-          # Clear all Docker resources
-          echo "🐳 Clearing all Docker resources..."
-          docker system prune -af --volumes 2>/dev/null || true
+          # Step 3: Stop Byparr container
+          echo "🛑 Step 3/6: Stopping Byparr container..."
+          if docker ps | grep -q byparr; then
+            docker stop --time=10 byparr 2>/dev/null && echo "✅ Byparr stopped" || echo "⚠️  Byparr stop failed"
+          else
+            echo "  Byparr already stopped"
+          fi
+          echo ""
           
-          # Stop cloudflare tunnel
-          echo "☁️  Stopping Cloudflare tunnel..."
+          # Step 4: Stop Cloudflare tunnel
+          echo "☁️  Step 4/6: Stopping Cloudflare tunnel..."
           if [ -f tunnel.pid ]; then
-            kill $(cat tunnel.pid) 2>/dev/null || true
+            TUNNEL_PID=$(cat tunnel.pid)
+            if kill -0 $TUNNEL_PID 2>/dev/null; then
+              kill -TERM $TUNNEL_PID 2>/dev/null && echo "✅ Tunnel stopped" || echo "⚠️  Tunnel stop failed"
+              sleep 2
+              kill -9 $TUNNEL_PID 2>/dev/null || true
+            else
+              echo "  Tunnel already stopped"
+            fi
             rm -f tunnel.pid
+          else
+            echo "  No tunnel PID file found"
           fi
           pkill -f cloudflared 2>/dev/null || true
+          echo ""
           
-          # Clear tunnel logs
+          # Step 5: Remove Docker containers and resources
+          echo "🗑️  Step 5/6: Removing Docker containers..."
+          docker rm -f goondvr byparr 2>/dev/null && echo "✅ Containers removed" || echo "  No containers to remove"
+          docker network rm recorder-network 2>/dev/null && echo "✅ Network removed" || echo "  No network to remove"
+          echo ""
+          
+          # Step 6: Remove Docker images
+          echo "🗑️  Step 6/6: Removing Docker images..."
+          docker rmi goondvr:latest 2>/dev/null && echo "✅ goondvr image removed" || echo "  goondvr image not found"
+          docker rmi ghcr.io/thephaseless/byparr:latest 2>/dev/null && echo "✅ byparr image removed" || echo "  byparr image not found"
+          docker rmi ghcr.io/flaresolverr/flaresolverr:latest 2>/dev/null && echo "✅ flaresolverr image removed" || echo "  flaresolverr image not found"
+          echo ""
+          
+          # Final Docker cleanup
+          echo "🧹 Final Docker cleanup..."
+          docker system prune -af --volumes 2>/dev/null && echo "✅ Docker system cleaned" || echo "⚠️  Docker cleanup failed"
+          echo ""
+          
+          # Clean up tunnel logs
           rm -f tunnel.log 2>/dev/null || true
           
+          echo "✅ Graceful shutdown completed at: $(date)"
           echo ""
-          echo "✅ Cleanup completed"
-          echo "🔄 Next run will start automatically in ~5 hours"
-          echo "🌐 A new dashboard URL will be generated on next run"
 
