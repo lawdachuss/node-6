@@ -196,34 +196,42 @@ jobs:
               echo "Testing tunnel (attempt $i/20)..."
               
               # Test with curl - check HTTP status code
-              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$TUNNEL_URL" 2>/dev/null || echo "000")
+              HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 10 --max-time 15 "$TUNNEL_URL" 2>&1 | tail -1)
+              
+              # Clean up the HTTP code (remove any extra characters)
+              HTTP_CODE=$(echo "$HTTP_CODE" | grep -oE '[0-9]{3}' | head -1)
+              
+              if [ -z "$HTTP_CODE" ]; then
+                echo "⏳ Connection timeout or DNS not resolved yet..."
+                sleep 5
+                continue
+              fi
               
               if [ "$HTTP_CODE" = "200" ]; then
                 echo "✅ Tunnel is VERIFIED ACCESSIBLE (HTTP 200)"
                 VERIFIED=true
                 
                 # Double-check API endpoint
-                API_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$TUNNEL_URL/api/stats" 2>/dev/null || echo "000")
+                API_CODE=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "$TUNNEL_URL/api/stats" 2>&1 | tail -1 | grep -oE '[0-9]{3}' | head -1)
                 if [ "$API_CODE" = "200" ]; then
                   echo "✅ API endpoint also verified (HTTP 200)"
                 else
-                  echo "⚠️  API returned HTTP $API_CODE (main page works though)"
+                  echo "⚠️  API returned HTTP ${API_CODE:-'no response'} (main page works though)"
                 fi
                 
                 break
               elif [ "$HTTP_CODE" = "502" ] || [ "$HTTP_CODE" = "503" ] || [ "$HTTP_CODE" = "504" ]; then
                 echo "⚠️  Gateway error (HTTP $HTTP_CODE) - backend not responding"
-              elif [ "$HTTP_CODE" = "000" ]; then
-                echo "⏳ No response yet..."
               else
-                echo "⚠️  Unexpected HTTP code: $HTTP_CODE"
+                echo "⚠️  HTTP $HTTP_CODE (waiting for 200...)"
               fi
               
-              sleep 3
+              sleep 5
             done
 
             if [ "$VERIFIED" = false ]; then
-              echo "❌ Tunnel URL exists but is NOT accessible after 60 seconds"
+              echo "❌ Tunnel URL exists but is NOT accessible after 100 seconds"
+              echo "Last HTTP code received: ${HTTP_CODE:-'none'}"
               echo "This tunnel is unusable - will retry with new tunnel"
               kill $TUNNEL_PID 2>/dev/null || true
               return 1
@@ -246,40 +254,63 @@ jobs:
             else
               echo "❌ Attempt $attempt failed"
               if [ $attempt -lt 3 ]; then
-                echo "⏳ Waiting 10 seconds before retry..."
-                sleep 10
+                echo "⏳ Waiting 15 seconds before retry..."
+                sleep 15
               fi
             fi
           done
 
           if [ "$TUNNEL_SUCCESS" = false ]; then
-            echo "❌ Failed to create accessible tunnel after 3 attempts"
-            exit 1
+            echo "⚠️  Failed to verify tunnel accessibility after 3 attempts"
+            echo "⚠️  This may be due to Cloudflare DNS propagation delays"
+            echo "⚠️  Proceeding anyway - tunnel may become accessible in 1-2 minutes"
+            
+            # Get the last tunnel URL even if not verified
+            TUNNEL_URL=$(grep -oP 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' tunnel.log | head -1)
+            
+            if [ -z "$TUNNEL_URL" ]; then
+              echo "❌ No tunnel URL found at all - cannot proceed"
+              exit 1
+            fi
+            
+            echo "$TUNNEL_URL" > tunnel_url.txt
+            echo "TUNNEL_URL=$TUNNEL_URL" >> $GITHUB_ENV
+            
+            echo ""
+            echo "╔════════════════════════════════════════════════════════════╗"
+            echo "║                    🌐 WEB UI ACCESS                        ║"
+            echo "╚════════════════════════════════════════════════════════════╝"
+            echo ""
+            echo "   $TUNNEL_URL"
+            echo ""
+            echo "   Status: ⏳ PROPAGATING (may take 1-2 minutes)"
+            echo ""
+          else
+            # Read the verified tunnel URL
+            TUNNEL_URL=$(cat tunnel_url.txt)
+
+            echo ""
+            echo "╔════════════════════════════════════════════════════════════╗"
+            echo "║                    🌐 WEB UI ACCESS                        ║"
+            echo "╚════════════════════════════════════════════════════════════╝"
+            echo ""
+            echo "   $TUNNEL_URL"
+            echo ""
+            echo "   Status: ✅ VERIFIED ACCESSIBLE"
+            echo ""
           fi
-
-          # Read the verified tunnel URL
-          TUNNEL_URL=$(cat tunnel_url.txt)
-
-          echo ""
-          echo "╔════════════════════════════════════════════════════════════╗"
-          echo "║                    🌐 WEB UI ACCESS                        ║"
-          echo "╚════════════════════════════════════════════════════════════╝"
-          echo ""
-          echo "   $TUNNEL_URL"
-          echo ""
-          echo "   Status: ✅ VERIFIED ACCESSIBLE"
-          echo ""
 
           # Save tunnel URL to Supabase
           echo "💾 Saving tunnel URL to Supabase..."
           SAVE_SUCCESS=false
+          
           for attempt in 1 2 3 4 5; do
             HTTP_CODE=$(curl -s -w "%{http_code}" -o /tmp/supabase_response.txt \
               -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/tunnel_sessions" \
               -H "apikey: ${{ secrets.SUPABASE_API_KEY }}" \
               -H "Content-Type: application/json" \
               -H "Prefer: return=minimal" \
-              -d "{\"run_id\": ${{ github.run_number }}, \"url\": \"$TUNNEL_URL\", \"started_at\": \"$(date -u +%FT%TZ)\", \"status\": \"active\", \"verified\": true}")
+              -d "{\"run_id\": ${{ github.run_number }}, \"url\": \"$TUNNEL_URL\", \"started_at\": \"$(date -u +%FT%TZ)\", \"is_active\": true}")
             
             if [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "204" ]; then
               echo "✅ Tunnel URL saved to Supabase (HTTP $HTTP_CODE)"
@@ -316,7 +347,7 @@ jobs:
                     -H "apikey: ${{ secrets.SUPABASE_API_KEY }}" \
                     -H "Content-Type: application/json" \
                     -H "Prefer: return=minimal" \
-                    -d "{\"run_id\": ${{ github.run_number }}, \"url\": \"$TUNNEL_URL\", \"started_at\": \"$(date -u +%FT%TZ)\", \"status\": \"active\", \"verified\": true}" \
+                    -d "{\"run_id\": ${{ github.run_number }}, \"url\": \"$TUNNEL_URL\", \"started_at\": \"$(date -u +%FT%TZ)\", \"is_active\": true}" \
                     > /dev/null 2>&1 || true
                 fi
                 continue
@@ -342,7 +373,7 @@ jobs:
                       -H "apikey: ${{ secrets.SUPABASE_API_KEY }}" \
                       -H "Content-Type: application/json" \
                       -H "Prefer: return=minimal" \
-                      -d "{\"run_id\": ${{ github.run_number }}, \"url\": \"$TUNNEL_URL\", \"started_at\": \"$(date -u +%FT%TZ)\", \"status\": \"active\", \"verified\": true}" \
+                      -d "{\"run_id\": ${{ github.run_number }}, \"url\": \"$TUNNEL_URL\", \"started_at\": \"$(date -u +%FT%TZ)\", \"is_active\": true}" \
                       > /dev/null 2>&1 || true
                   fi
                 fi
