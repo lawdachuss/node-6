@@ -5,17 +5,13 @@ ENV GOTOOLCHAIN=local
 ENV GOPROXY=https://proxy.golang.org,direct
 ENV GOPRIVATE=""
 
-# Install build dependencies
 RUN apk add --no-cache git ca-certificates
 
-# Copy go mod files first for better caching
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
 COPY ./ ./
 
-# Build with retry logic
 RUN go build -ldflags="-s -w" -o goondvr . || \
     (echo "Build failed, retrying..." && sleep 5 && go build -ldflags="-s -w" -o goondvr .)
 
