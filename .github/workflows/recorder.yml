@@ -103,10 +103,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          echo "Starting all containers..."
-          # Single up command — Docker Compose handles dependency order internally.
-          # This avoids races between separate up commands that can drop byparr-lb.
-          docker compose up -d --build --scale byparr=2
+          echo "Starting Byparr + nginx first..."
+          docker compose up -d --scale byparr=2 byparr byparr-lb
+
+          echo "=== Container status after byparr start ==="
+          docker compose ps -a
 
           echo "Waiting for Byparr load balancer..."
           for attempt in {1..45}; do
@@ -116,15 +117,18 @@ jobs:
             fi
             if (( attempt == 45 )); then
               echo "Byparr did not become healthy in time"
-              docker compose ps
+              docker compose ps -a
               docker compose logs --tail=20 byparr byparr-lb || true
               exit 1
             fi
             sleep 4
           done
 
-          echo "Running services:"
-          docker compose ps
+          echo "Starting remaining services..."
+          docker compose up -d --build chaturbate-dvr uploader cookie-refresher
+
+          echo "=== Full container status ==="
+          docker compose ps -a
 
           echo "Waiting for cookie-refresher to push initial Cloudflare cookies..."
           cookies_ok=false
