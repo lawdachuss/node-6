@@ -133,18 +133,28 @@ jobs:
 
           echo "Waiting for cookie-refresher (built-in) to push initial cookies..."
           cookies_ok=false
-          for attempt in {1..90}; do
+          progress_check_interval=15
+          for attempt in {1..200}; do
             if docker compose logs chaturbate-dvr 2>/dev/null | grep -q 'refreshed and saved'; then
               echo "Initial Cloudflare cookies applied"
               cookies_ok=true
               break
+            fi
+            # Periodically show cookie-refresher progress
+            if (( attempt % progress_check_interval == 1 )); then
+              cookie_logs="$(docker compose logs chaturbate-dvr 2>/dev/null | grep '\[cookie-refresher\]' | tail -3 || true)"
+              if [[ -n "$cookie_logs" ]]; then
+                echo "  Recent cookie-refresher activity:"
+                echo "$cookie_logs"
+              fi
             fi
             sleep 5
           done
 
           if [[ "$cookies_ok" != "true" ]]; then
             echo "Cookie refresher did not push cookies in time"
-            docker compose logs --tail=80 chaturbate-dvr
+            docker compose logs --tail=120 chaturbate-dvr
+            docker compose logs --tail=30 byparr byparr-lb 2>/dev/null || true
             exit 1
           fi
 
