@@ -1,671 +1,781 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="stylesheet" href="/static/styles/app.css" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
-        <script src="/static/scripts/htmx.min.js" crossorigin="anonymous"></script>
-        <script src="/static/scripts/sse.min.js" crossorigin="anonymous"></script>
-        <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-        <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-        <link rel="manifest" href="/static/site.webmanifest">
-        <title>Chaturbate DVR</title>
-        <script>
-            // Apply dark mode before body paints to prevent flash-of-light.
-            (function() {
-                if (localStorage.getItem('darkMode') === 'true' ||
-                    (localStorage.getItem('darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                    document.documentElement.classList.add('dark');
-                }
-            })();
-        </script>
-    </head>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/static/styles/app.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;0,14..32,800;0,14..32,900;1,14..32,400&display=swap" rel="stylesheet" />
+    <script src="/static/scripts/htmx.min.js" crossorigin="anonymous"></script>
+    <script src="/static/scripts/sse.min.js" crossorigin="anonymous"></script>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+    <link rel="manifest" href="/static/site.webmanifest">
+    <title>Chaturbate DVR</title>
+    <script>
+        (function() {
+            if (localStorage.getItem('darkMode') === 'true' ||
+                (localStorage.getItem('darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+    </script>
+    <style>
+        body { background-color: #09090b; }
+        .sidebar-bg { background: #0c0c0f; }
+        .main-bg { background: #0f0f12; }
+        .panel-bg { background: rgba(18,18,22,0.95); }
+        .log-bg { background: #0a0a0d; }
+        .glass {
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .input-field {
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: #e4e4e7;
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 13px;
+            width: 100%;
+            transition: all 0.2s ease;
+        }
+        .input-field:focus {
+            outline: none;
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(225,29,72,0.4);
+            box-shadow: 0 0 0 3px rgba(225,29,72,0.08);
+        }
+        .input-field::placeholder { color: #52525b; }
+        textarea.input-field { resize: none; font-family: ui-monospace, monospace; font-size: 12px; }
+        select.input-field { cursor: pointer; padding-right: 2.5rem; }
+        .btn-primary {
+            background: linear-gradient(135deg, #e11d48, #be185d);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 4px 15px rgba(225,29,72,0.3), 0 1px 3px rgba(0,0,0,0.3);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #f43f5e, #e11d48);
+            box-shadow: 0 6px 20px rgba(225,29,72,0.4), 0 1px 3px rgba(0,0,0,0.3);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #a1a1aa;
+            border-radius: 10px;
+            font-weight: 500;
+            font-size: 13px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-secondary:hover { background: rgba(255,255,255,0.08); color: #e4e4e7; border-color: rgba(255,255,255,0.15); }
+        .dialog-overlay { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; }
+        .section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #3f3f46; }
+    </style>
+</head>
 
-    <body class="bg-zinc-50 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 h-dvh font-sans overflow-hidden" hx-ext="sse">
-        <div class="flex h-dvh">
+<body class="text-zinc-100 h-dvh font-sans overflow-hidden" style="background:#09090b" hx-ext="sse">
+<div class="flex h-dvh">
 
-            <!-- Sidebar -->
-            <aside id="sidebar" class="w-[260px] max-md:w-full bg-zinc-950 border-r border-zinc-800/60 max-md:border-r-0 flex flex-col shrink-0">
+    <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+    <aside id="sidebar" class="w-[256px] max-md:w-full sidebar-bg border-r border-white/[0.05] max-md:border-r-0 flex flex-col shrink-0 relative overflow-hidden">
 
-                <!-- Top accent bar -->
-                <div class="h-0.5 bg-gradient-to-r from-rose-700 via-rose-500 to-rose-700 shrink-0"></div>
+        <!-- Ambient glow -->
+        <div class="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-rose-500/60 to-transparent"></div>
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full bg-rose-600/5 blur-3xl pointer-events-none"></div>
 
-                <!-- Sidebar Header -->
-                <div class="px-4 pt-4 pb-3.5 border-b border-zinc-800/60">
-                    <div class="flex items-center gap-2 mb-0.5">
-                        <span class="w-2 h-2 rounded-full bg-rose-500 brand-dot shrink-0"></span>
-                        <h1 class="text-[11px] font-black uppercase tracking-[0.18em] text-zinc-100">Chaturbate DVR</h1>
-                    </div>
-                    <div class="text-[10px] text-zinc-600 uppercase tracking-wide mt-0.5 pl-4" id="recording-counter"></div>
-                    <div class="flex gap-2 mt-3">
-                        <button onclick="document.getElementById('settings-dialog').showModal()"
-                                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium border border-zinc-700/70 text-zinc-400 rounded-lg hover:bg-zinc-800/80 hover:text-zinc-200 transition-colors">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
-                            </svg>
-                            Settings
-                        </button>
-                        <button onclick="document.getElementById('create-dialog').showModal()"
-                                class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold bg-rose-600 text-white rounded-lg hover:bg-rose-500 transition-colors shadow-lg shadow-rose-900/25">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                                <path d="M12 5v14m-7-7h14"/>
-                            </svg>
-                            Add
-                        </button>
-                    </div>
+        <!-- Header -->
+        <div class="relative px-4 pt-5 pb-4 border-b border-white/[0.05]">
+            <div class="flex items-center gap-2.5 mb-1">
+                <div class="relative">
+                    <span class="w-2 h-2 rounded-full bg-rose-500 brand-dot block shrink-0"></span>
                 </div>
-                <!-- / Sidebar Header -->
+                <h1 class="text-[11px] font-black uppercase tracking-[0.2em] text-zinc-100">Chaturbate DVR</h1>
+            </div>
+            <div class="text-[10px] text-zinc-600 uppercase tracking-wider mt-0.5 pl-4" id="recording-counter"></div>
 
-                <!-- Channel List (always visible scrollable list) -->
-                <div class="flex-1 flex flex-col p-2 overflow-hidden">
-                    {{ if .Channels }}
-                    <div id="channel-list" class="flex-1 overflow-y-auto space-y-0.5">
-                        {{ range .Channels }}
-                        <button type="button"
-                                class="channel-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-all hover:bg-zinc-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-600"
-                                data-username="{{ .Username }}"
-                                data-priority="{{ if and .IsOnline (not .IsPaused) }}0{{ else if .IsPaused }}{{ if .IsOnline }}2{{ else }}3{{ end }}{{ else }}1{{ end }}"
-                                onclick="selectChannel('{{ .Username }}')">
-                            <span class="w-2 h-2 rounded-full shrink-0 {{ if and .IsOnline (not .IsPaused) }}bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.5)] rec-pulse{{ else if .IsPaused }}bg-red-500{{ else }}bg-zinc-600{{ end }}"
-                                  data-status-dot="{{ .Username }}"></span>
-                            <span class="text-sm font-medium flex-1 truncate text-zinc-200">{{ .Username }}</span>
-                            <span class="text-[10px] text-zinc-500 uppercase tracking-wide" data-status-text="{{ .Username }}">{{ if and .IsOnline (not .IsPaused) }}Rec{{ else if .RoomStatus }}{{ .RoomStatus }}{{ end }}</span>
-                        </button>
-                        {{ end }}
-                    </div>
-                    {{ else }}
-                    <div class="flex-1 flex flex-col items-center justify-center text-zinc-600 py-8 gap-2">
-                        <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>
-                        <span class="text-xs">No channels added</span>
-                    </div>
-                    {{ end }}
-                </div>
-
-                <!-- Disk Usage -->
-                <div class="px-4 py-3 border-t border-zinc-800/60">
-                    <div class="flex items-center justify-between mb-1.5">
-                        <span class="text-[10px] text-zinc-500 uppercase font-semibold tracking-wider">Disk</span>
-                        <span class="text-[10px] text-zinc-600">{{ .Disk.Used }} / {{ .Disk.Total }}</span>
-                    </div>
-                    <div class="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full transition-all duration-500 {{ if gt .Disk.Percent 80 }}bg-red-500{{ else if gt .Disk.Percent 60 }}bg-amber-500{{ else }}bg-emerald-500{{ end }}" style="width: {{ .Disk.Percent }}%"></div>
-                    </div>
-                    <div class="text-[9px] text-zinc-600 mt-1">{{ .Disk.Free }} free</div>
-                </div>
-                <!-- / Disk Usage -->
-
-                <!-- Sidebar Footer -->
-                <div class="px-4 py-3 border-t border-zinc-800/60 flex items-center justify-between">
-                    <a href="/videos"
-                       class="flex items-center gap-1.5 text-[11px] font-medium text-zinc-500 hover:text-zinc-200 transition-colors">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/>
-                        </svg>
-                        Videos
-                    </a>
-                    <button onclick="toggleDarkMode()" class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-800 transition-colors text-zinc-500 hover:text-zinc-300" title="Toggle dark mode">
-                        <svg class="w-4 h-4 block dark:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-                        <svg class="w-4 h-4 hidden dark:block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                    </button>
-                </div>
-                <!-- / Sidebar Footer -->
-
-            </aside>
-            <!-- / Sidebar -->
-
-            <!-- Main Content -->
-            <main id="main-content" class="flex-1 flex flex-col overflow-hidden max-md:hidden max-md:w-full" {{ if .Channels }}sse-connect="/updates?stream=updates"{{ end }}>
-
-                {{ if not .Channels }}
-                <!-- Blankslate -->
-                <div class="flex-1 flex flex-col items-center justify-center text-zinc-400">
-                    <svg class="w-12 h-12 mb-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                        <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/>
+            <!-- Action buttons -->
+            <div class="flex gap-2 mt-4">
+                <button onclick="document.getElementById('settings-dialog').showModal()"
+                        class="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium rounded-lg transition-all"
+                        style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#71717a"
+                        onmouseenter="this.style.background='rgba(255,255,255,0.07)';this.style.color='#d4d4d8'"
+                        onmouseleave="this.style.background='rgba(255,255,255,0.04)';this.style.color='#71717a'">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
                     </svg>
-                    <h2 class="text-lg font-semibold text-zinc-600 dark:text-zinc-300 mb-1">No channels are currently recording</h2>
-                    <p class="text-sm text-zinc-400 mb-4">Add a new Chaturbate channel to start recording.</p>
-                    <button onclick="document.getElementById('create-dialog').showModal()"
-                            class="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-rose-600 text-white rounded-lg hover:bg-rose-500 transition-colors shadow-lg shadow-rose-900/20">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                            <path d="M12 5v14m-7-7h14"/>
-                        </svg>
-                        Add Channel
-                    </button>
-                </div>
-                <!-- / Blankslate -->
-                {{ else }}
-
-                <!-- No-selection state -->
-                <div id="no-selection" class="flex-1 flex flex-col items-center justify-center text-zinc-400">
-                    <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                        <path d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59"/>
+                    Settings
+                </button>
+                <button onclick="document.getElementById('create-dialog').showModal()"
+                        class="btn-primary flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px]">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path d="M12 5v14m-7-7h14"/>
                     </svg>
-                    <p class="text-sm">Select a channel</p>
-                </div>
-                <!-- / No-selection state -->
-
-                <!-- Channel detail panels -->
-                {{ range .Channels }}
-                <div class="channel-detail hidden flex-1 flex flex-col overflow-hidden" data-channel="{{ .Username }}">
-                    <div class="flex-1 min-h-0 flex overflow-hidden">
-                        <!-- Info panel -->
-                        <div sse-swap="{{ .Username }}-info" class="w-[300px] max-md:w-full shrink-0 p-5 border-r border-zinc-200 dark:border-zinc-700 max-md:border-r-0 bg-white dark:bg-zinc-800 overflow-y-auto" style="line-height: 1.45">
-                            {{ template "channel_info" . }}
-                        </div>
-                        <!-- Log panel (hidden on mobile; logs are unreadable on small screens) -->
-                        <div class="flex-1 max-md:hidden min-w-0 flex flex-col p-5 bg-zinc-50 dark:bg-zinc-900">
-                            <div class="flex items-center gap-1 pb-2 flex-wrap">
-                                <button class="log-filter-btn active" data-filter="all" title="Show all">All</button>
-                                <button class="log-filter-dot" data-filter="play" title="Recording" style="color:#10b981">●</button>
-                                <button class="log-filter-dot" data-filter="stop" title="Stop" style="color:#e11d48">●</button>
-                                <button class="log-filter-dot" data-filter="error" title="Error" style="color:#dc2626">●</button>
-                                <button class="log-filter-dot" data-filter="compress" title="Compress" style="color:#8b5cf6">●</button>
-                                <button class="log-filter-dot" data-filter="mux" title="Mux" style="color:#0891b2">●</button>
-                                <button class="log-filter-dot" data-filter="file" title="File" style="color:#d97706">●</button>
-                                <button class="log-filter-dot" data-filter="upload" title="Upload" style="color:#2563eb">●</button>
-                                <button class="log-filter-dot" data-filter="delete" title="Delete" style="color:#b91c1c">●</button>
-                                <button class="log-filter-dot" data-filter="cf" title="Cloudflare" style="color:#ea580c">●</button>
-                                <button class="log-filter-dot" data-filter="status" title="Status" style="color:#0d9488">●</button>
-                                <button class="log-filter-dot" data-filter="info" title="Info" style="color:#71717a">●</button>
-                                <button class="log-filter-clear ml-auto" title="Clear all logs">✕</button>
-                            </div>
-                            <div id="{{ .Username }}-log-container"
-                                 class="log-container flex-1 min-h-0 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg p-2 font-mono text-xs overflow-y-auto focus:outline-none"
-                                 sse-swap="{{ .Username }}-log">
-                                {{- range .Logs }}
-                                <div class="log-line">{{ . }}</div>
-                                {{- end }}
-                            </div>
-                            <div class="flex items-center justify-between mt-2">
-                                <label class="inline-flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500 cursor-pointer select-none">
-                                    <input type="checkbox" checked class="log-scroll-toggle accent-zinc-900 dark:accent-zinc-100" />
-                                    Auto-Update
-                                </label>
-                                <span class="text-[10px] text-zinc-400" id="{{ .Username }}-log-count"></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {{ end }}
-                <!-- / Channel detail panels -->
-
-                {{ end }}
-            </main>
-            <!-- / Main Content -->
-
+                    Add
+                </button>
+            </div>
         </div>
 
-        <!-- Settings Dialog -->
-        <dialog id="settings-dialog" class="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl w-full max-w-[560px] max-h-[85vh] overflow-y-auto p-0">
-            <form action="/update_config" method="POST">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-700">
-                    <h2 class="text-base font-semibold">Settings</h2>
-                    <button type="button" onclick="this.closest('dialog').close()"
-                            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                    </button>
+        <!-- Channel list -->
+        <div class="flex-1 flex flex-col overflow-hidden py-2 px-2">
+            {{ if .Channels }}
+            <div id="channel-list" class="flex-1 overflow-y-auto space-y-0.5">
+                {{ range .Channels }}
+                <button type="button"
+                        class="channel-item w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-left transition-all"
+                        data-username="{{ .Username }}"
+                        data-priority="{{ if and .IsOnline (not .IsPaused) }}0{{ else if .IsPaused }}{{ if .IsOnline }}2{{ else }}3{{ end }}{{ else }}1{{ end }}"
+                        onclick="selectChannel('{{ .Username }}')">
+                    <span class="relative shrink-0">
+                        <span class="w-2 h-2 rounded-full block {{ if and .IsOnline (not .IsPaused) }}bg-emerald-400 rec-pulse{{ else if .IsPaused }}bg-rose-500{{ else }}bg-zinc-600{{ end }}"
+                              data-status-dot="{{ .Username }}"></span>
+                    </span>
+                    <span class="text-[13px] font-medium flex-1 truncate text-zinc-300 channel-username">{{ .Username }}</span>
+                    <span class="text-[9px] font-bold uppercase tracking-widest shrink-0 {{ if and .IsOnline (not .IsPaused) }}text-emerald-500{{ else }}text-zinc-600{{ end }}" data-status-text="{{ .Username }}">{{ if and .IsOnline (not .IsPaused) }}Rec{{ else if .RoomStatus }}{{ .RoomStatus }}{{ end }}</span>
+                </button>
+                {{ end }}
+            </div>
+            {{ else }}
+            <div class="flex-1 flex flex-col items-center justify-center gap-3 py-8">
+                <div class="w-12 h-12 rounded-2xl flex items-center justify-center" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+                    <svg class="w-5 h-5 text-zinc-700" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/></svg>
                 </div>
-                <div class="px-6 py-5 space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Cookies</label>
-                        <textarea name="cookies" rows="4" class="w-full bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-lg px-3 py-2 text-sm dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent resize-none">{{ .Config.Cookies }}</textarea>
-                        <p class="text-xs text-zinc-400 mt-1">Use semicolons to separate multiple cookies. See <a class="text-blue-600 hover:text-blue-500 underline" href="https://github.com/teacat/chaturbate-dvr/?tab=readme-ov-file#-cookies--user-agent" target="_blank">README</a> for details.</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">User Agent</label>
-                        <textarea name="user_agent" rows="4" class="w-full bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-lg px-3 py-2 text-sm dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent resize-none">{{ .Config.UserAgent }}</textarea>
-                        <p class="text-xs text-zinc-400 mt-1">User-Agent can be found using tools like <a class="text-blue-600 hover:text-blue-500 underline" href="https://www.whatismybrowser.com/detect/what-is-my-user-agent/" target="_blank">WhatIsMyBrowser</a>.</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Byparr / FlareSolverr URL</label>
-                        <input type="text" name="byparr_url" placeholder="http://localhost:8191/v1" value="{{ .Config.ByparrURL }}" class="w-full bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-lg px-3 py-2 text-sm dark:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent" />
-                        <p class="text-xs text-zinc-400 mt-1">Leave blank to use the default <code class="font-mono">http://localhost:8191/v1</code>. Required if Byparr runs at a different address.</p>
-                    </div>
-                </div>
-                <div class="flex items-center gap-2 px-6 py-3 bg-emerald-50 dark:bg-emerald-900/20 border-t border-zinc-100 dark:border-zinc-700 text-xs text-emerald-700 dark:text-emerald-400">
-                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                    Settings are saved to disk and will persist across restarts
-                </div>
-                <div class="flex justify-end gap-2 px-6 py-4 border-t border-zinc-100 dark:border-zinc-700">
-                    <button type="button" onclick="this.closest('dialog').close()" class="px-4 py-2 text-sm font-medium border border-zinc-200 dark:border-zinc-600 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-300 transition-colors">Apply</button>
-                </div>
-            </form>
-        </dialog>
-        <!-- / Settings Dialog -->
+                <span class="text-xs text-zinc-600">No channels added</span>
+            </div>
+            {{ end }}
+        </div>
 
-        <!-- Create Dialog -->
-        <dialog id="create-dialog" class="bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-xl w-full max-w-[560px] max-h-[85vh] overflow-y-auto p-0">
-            <form action="/create_channel" method="POST">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-zinc-100 dark:border-zinc-700">
-                    <h2 class="text-base font-semibold">Add Channel</h2>
-                    <button type="button" onclick="this.closest('dialog').close()"
-                            class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                    </button>
+        <!-- Disk Usage -->
+        <div class="px-4 py-3 border-t border-white/[0.05]">
+            <div class="flex items-center justify-between mb-2">
+                <span class="section-label">Storage</span>
+                <span class="text-[10px] text-zinc-600 tabular-nums">{{ .Disk.Used }} / {{ .Disk.Total }}</span>
+            </div>
+            <div class="w-full h-1.5 rounded-full overflow-hidden" style="background:rgba(255,255,255,0.05)">
+                <div class="h-full rounded-full transition-all duration-700 {{ if gt .Disk.Percent 80 }}bg-gradient-to-r from-red-600 to-rose-500{{ else if gt .Disk.Percent 60 }}bg-gradient-to-r from-amber-600 to-orange-500{{ else }}bg-gradient-to-r from-emerald-600 to-teal-500{{ end }}"
+                     style="width:{{ .Disk.Percent }}%"></div>
+            </div>
+            <div class="text-[9px] text-zinc-700 mt-1.5">{{ .Disk.Free }} free</div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-4 py-3 border-t border-white/[0.05] flex items-center justify-between">
+            <a href="/videos"
+               class="flex items-center gap-1.5 text-[11px] font-medium text-zinc-600 hover:text-zinc-200 transition-colors group">
+                <svg class="w-3.5 h-3.5 group-hover:text-rose-400 transition-colors" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/>
+                </svg>
+                Videos
+            </a>
+            <button onclick="toggleDarkMode()" class="w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-zinc-600 hover:text-zinc-300" style="background:rgba(255,255,255,0.03)" title="Toggle theme">
+                <svg class="w-3.5 h-3.5 block dark:hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                <svg class="w-3.5 h-3.5 hidden dark:block" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
+    <main id="main-content" class="flex-1 flex flex-col overflow-hidden max-md:hidden" style="background:#0f0f12" {{ if .Channels }}sse-connect="/updates?stream=updates"{{ end }}>
+
+        {{ if not .Channels }}
+        <!-- Empty state -->
+        <div class="flex-1 flex flex-col items-center justify-center">
+            <div class="relative mb-6">
+                <div class="absolute inset-0 rounded-3xl bg-rose-600/10 blur-2xl scale-150"></div>
+                <div class="relative w-20 h-20 rounded-3xl flex items-center justify-center" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07)">
+                    <svg class="w-9 h-9 text-zinc-700" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                        <path d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"/>
+                    </svg>
                 </div>
-                <div class="px-6 py-5 space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Channel Username</label>
-                        <div class="flex">
-                            <span class="inline-flex items-center px-3 text-sm text-zinc-400 bg-zinc-50 dark:bg-zinc-700 border border-r-0 border-zinc-200 dark:border-zinc-600 rounded-l-lg">{{ .Config.Domain }}</span>
-                            <input type="text" name="username" autofocus required class="flex-1 border border-zinc-200 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 rounded-r-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent" />
+            </div>
+            <h2 class="text-lg font-bold text-zinc-300 mb-1.5">No channels are currently recording</h2>
+            <p class="text-sm text-zinc-600 mb-6">Add a Chaturbate channel to start monitoring and recording.</p>
+            <button onclick="document.getElementById('create-dialog').showModal()" class="btn-primary flex items-center gap-2 px-5 py-2.5 text-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>
+                Add Channel
+            </button>
+        </div>
+
+        {{ else }}
+
+        <!-- No selection hint -->
+        <div id="no-selection" class="flex-1 flex flex-col items-center justify-center">
+            <div class="w-12 h-12 rounded-2xl flex items-center justify-center mb-3" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)">
+                <svg class="w-5 h-5 text-zinc-700" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <path d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59"/>
+                </svg>
+            </div>
+            <p class="text-sm text-zinc-600">Select a channel from the sidebar</p>
+        </div>
+
+        <!-- Channel detail panels -->
+        {{ range .Channels }}
+        <div class="channel-detail hidden flex-1 flex flex-col overflow-hidden" data-channel="{{ .Username }}">
+            <div class="flex-1 min-h-0 flex overflow-hidden">
+
+                <!-- Info panel -->
+                <div sse-swap="{{ .Username }}-info"
+                     class="w-[290px] shrink-0 overflow-y-auto panel-bg border-r border-white/[0.04]"
+                     style="padding:20px">
+                    {{ template "channel_info" . }}
+                </div>
+
+                <!-- Log panel (terminal) -->
+                <div class="flex-1 min-w-0 flex flex-col" style="background:#07070a">
+                    <!-- Terminal title bar + filter bar -->
+                    <div class="flex items-center gap-2 px-3 py-2 shrink-0 flex-wrap" style="background:#07070a;border-bottom:1px solid rgba(255,255,255,0.05)">
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="w-2 h-2 rounded-full" style="background:#2a2a2e"></span>
+                            <span class="w-2 h-2 rounded-full" style="background:#2a2a2e"></span>
+                            <span class="w-2 h-2 rounded-full" style="background:#2a2a2e"></span>
                         </div>
-                        <p class="text-xs text-zinc-400 mt-1">Use commas to separate multiple channel names.</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Resolution</label>
-                        <select name="resolution" class="w-full border border-zinc-200 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent">
-                            <option value="2160" {{ if eq .Config.Resolution 2160 }}selected{{ end }}>4K</option>
-                            <option value="1440" {{ if eq .Config.Resolution 1440 }}selected{{ end }}>2K</option>
-                            <option value="1080" {{ if eq .Config.Resolution 1080 }}selected{{ end }}>1080p</option>
-                            <option value="720" {{ if eq .Config.Resolution 720 }}selected{{ end }}>720p</option>
-                            <option value="540" {{ if eq .Config.Resolution 540 }}selected{{ end }}>540p</option>
-                            <option value="480" {{ if eq .Config.Resolution 480 }}selected{{ end }}>480p</option>
-                            <option value="240" {{ if eq .Config.Resolution 240 }}selected{{ end }}>240p</option>
-                        </select>
-                        <p class="text-xs text-zinc-400 mt-1">The lower resolution will be used if the selected resolution is not available.</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-2">Framerate</label>
-                        <div class="space-y-1.5 pl-1">
-                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                <input type="radio" name="framerate" value="60" {{ if eq .Config.Framerate 60 }}checked{{ end }} class="accent-zinc-900 dark:accent-zinc-100" /> 60 FPS (or lower)
-                            </label>
-                            <label class="flex items-center gap-2 text-sm cursor-pointer">
-                                <input type="radio" name="framerate" value="30" {{ if eq .Config.Framerate 30 }}checked{{ end }} class="accent-zinc-900 dark:accent-zinc-100" /> 30 FPS
-                            </label>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Filename Pattern</label>
-                        <input type="text" name="pattern" value="{{ .Config.Pattern }}" class="w-full border border-zinc-200 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent" />
-                        <p class="text-xs text-zinc-400 mt-1">See the <a class="text-blue-600 hover:text-blue-500 underline" href="https://github.com/teacat/chaturbate-dvr" target="_blank">README</a> for details.</p>
-                    </div>
-                    <div class="h-px bg-zinc-100 dark:bg-zinc-600"></div>
-                    <div>
-                        <label class="block text-sm font-medium text-zinc-600 dark:text-zinc-300 mb-2">Splitting Options</label>
-                        <div class="bg-zinc-50 dark:bg-zinc-700/50 border border-zinc-100 dark:border-zinc-600 rounded-lg p-4">
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Max Filesize</label>
-                                    <div class="flex">
-                                        <input type="number" name="max_filesize" value="{{ .Config.MaxFilesize }}" class="flex-1 min-w-0 border border-r-0 border-zinc-200 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 rounded-l-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent" />
-                                        <span class="inline-flex items-center px-3 text-sm text-zinc-400 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-r-lg">MB</span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Max Duration</label>
-                                    <div class="flex">
-                                        <input type="number" name="max_duration" value="{{ .Config.MaxDuration }}" class="flex-1 min-w-0 border border-r-0 border-zinc-200 dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-200 rounded-l-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:border-transparent" />
-                                        <span class="inline-flex items-center px-3 text-sm text-zinc-400 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded-r-lg">Min(s)</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <p class="text-xs text-zinc-400 mt-2">Splitting will be disabled if both options are 0.</p>
+                        <span class="text-[10px] shrink-0" style="color:#2e2e34;font-family:ui-monospace,monospace">{{ .Username }}.log</span>
+                        <div class="ml-auto flex items-center gap-1 flex-wrap">
+                            <button class="log-filter-btn active" data-filter="all">all</button>
+                            <button class="log-filter-dot" data-filter="play"     title="Recording"  style="color:#10b981">●</button>
+                            <button class="log-filter-dot" data-filter="stop"     title="Stopped"    style="color:#e11d48">●</button>
+                            <button class="log-filter-dot" data-filter="error"    title="Error"      style="color:#ef4444">●</button>
+                            <button class="log-filter-dot" data-filter="compress" title="Compress"   style="color:#8b5cf6">●</button>
+                            <button class="log-filter-dot" data-filter="mux"      title="Mux"        style="color:#06b6d4">●</button>
+                            <button class="log-filter-dot" data-filter="file"     title="File"       style="color:#f59e0b">●</button>
+                            <button class="log-filter-dot" data-filter="upload"   title="Upload"     style="color:#3b82f6">●</button>
+                            <button class="log-filter-dot" data-filter="delete"   title="Delete"     style="color:#dc2626">●</button>
+                            <button class="log-filter-dot" data-filter="cf"       title="Cloudflare" style="color:#f97316">●</button>
+                            <button class="log-filter-dot" data-filter="status"   title="Status"     style="color:#14b8a6">●</button>
+                            <button class="log-filter-dot" data-filter="info"     title="Info"       style="color:#3f3f46">●</button>
+                            <button class="log-filter-clear" title="Clear">✕</button>
                         </div>
                     </div>
-                    <div>
-                        <label class="flex items-center gap-2 text-sm cursor-pointer">
-                            <input type="checkbox" name="compress" value="true" {{ if .Config.Compress }}checked{{ end }} class="accent-zinc-900 dark:accent-zinc-100" />
-                            Compress to MKV after recording (requires ffmpeg)
+                    <!-- Terminal log output -->
+                    <div id="{{ .Username }}-log-container"
+                         class="log-container flex-1 min-h-0 w-full overflow-y-auto"
+                         style="background:#07070a">
+                        {{- range .Logs }}
+                        <div class="log-line" data-raw="{{ . }}"></div>
+                        {{- end }}
+                    </div>
+                    <!-- Hidden SSE proxy — needed so htmx-sse registers the event listener -->
+                    <div sse-swap="{{ .Username }}-log" style="display:none;position:absolute;pointer-events:none" aria-hidden="true"></div>
+                    <!-- Footer -->
+                    <div class="flex items-center justify-between px-3 py-1.5 shrink-0" style="background:#07070a;border-top:1px solid rgba(255,255,255,0.04)">
+                        <label class="inline-flex items-center gap-2 cursor-pointer select-none" style="font-family:ui-monospace,monospace;font-size:10px;color:#2e2e34">
+                            <input type="checkbox" checked class="log-scroll-toggle accent-rose-500" style="width:10px;height:10px" />
+                            auto-scroll
                         </label>
-                        <p class="text-xs text-zinc-400 mt-1 ml-6">Convert recorded .ts or .mp4 files to .mkv with ffmpeg. Original source files will be deleted.</p>
+                        <span style="font-family:ui-monospace,monospace;font-size:10px;color:#2e2e34" id="{{ .Username }}-log-count"></span>
                     </div>
                 </div>
-                <div class="flex justify-end gap-2 px-6 py-4 border-t border-zinc-100 dark:border-zinc-700">
-                    <button type="button" onclick="this.closest('dialog').close()" class="px-4 py-2 text-sm font-medium border border-zinc-200 dark:border-zinc-600 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors">Cancel</button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-lg hover:bg-zinc-800 dark:hover:bg-zinc-300 transition-colors">Add Channel</button>
+
+            </div>
+        </div>
+        {{ end }}
+
+        {{ end }}
+    </main>
+
+</div>
+
+<!-- ═══════════════════ SETTINGS DIALOG ═══════════════════ -->
+<dialog id="settings-dialog" class="text-zinc-100 rounded-2xl w-full max-w-[540px] max-h-[85vh] overflow-y-auto p-0 border-0 shadow-2xl" style="background:#12121a;border:1px solid rgba(255,255,255,0.08)">
+    <form action="/update_config" method="POST">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-5" style="border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(225,29,72,0.12);border:1px solid rgba(225,29,72,0.2)">
+                    <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                    </svg>
                 </div>
-            </form>
-        </dialog>
-        <!-- / Create Dialog -->
+                <h2 class="text-base font-bold">Settings</h2>
+            </div>
+            <button type="button" onclick="this.closest('dialog').close()"
+                    class="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 transition-colors" style="background:rgba(255,255,255,0.04)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
 
-        <script>
-            // Below md (768px), sidebar and main-content are stacked overlays — only one visible at a time.
-            // Entering detail pushes a history entry so the browser back button returns to the list.
-            function isMobile() {
-                return window.matchMedia('(max-width: 767px)').matches;
-            }
-            function setMobileView(view) { // 'list' | 'detail'
-                document.getElementById('sidebar').classList.toggle('max-md:hidden', view === 'detail');
-                document.getElementById('main-content').classList.toggle('max-md:hidden', view === 'list');
-            }
-            // Sync classes even on desktop — max-md:hidden is inert there, but skipping the sync
-            // lets DOM and history diverge after a viewport resize.
-            window.addEventListener('popstate', function(e) {
-                setMobileView(e.state && e.state.mobileView === 'detail' ? 'detail' : 'list');
-            });
+        <div class="px-6 py-5 space-y-5">
+            <div>
+                <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Cookies</label>
+                <textarea name="cookies" rows="4" class="input-field" style="font-family:ui-monospace,monospace;font-size:12px">{{ .Config.Cookies }}</textarea>
+                <p class="text-[11px] text-zinc-600 mt-1.5">Separate multiple cookies with semicolons. See <a class="text-rose-400 hover:text-rose-300 underline" href="https://github.com/teacat/chaturbate-dvr/?tab=readme-ov-file#-cookies--user-agent" target="_blank">README</a> for details.</p>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">User Agent</label>
+                <textarea name="user_agent" rows="3" class="input-field" style="font-family:ui-monospace,monospace;font-size:12px">{{ .Config.UserAgent }}</textarea>
+                <p class="text-[11px] text-zinc-600 mt-1.5">Find yours at <a class="text-rose-400 hover:text-rose-300 underline" href="https://www.whatismybrowser.com/detect/what-is-my-user-agent/" target="_blank">WhatIsMyBrowser</a>.</p>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Byparr / FlareSolverr URL</label>
+                <input type="text" name="byparr_url" placeholder="http://localhost:8191/v1" value="{{ .Config.ByparrURL }}" class="input-field" />
+                <p class="text-[11px] text-zinc-600 mt-1.5">Leave blank for default <code class="font-mono text-zinc-500">http://localhost:8191/v1</code>.</p>
+            </div>
+        </div>
 
-            // === Channel selection ===
-            function selectChannel(username, skipMobileFlip) {
-                document.querySelectorAll('.channel-detail').forEach(function(el) { el.classList.add('hidden'); });
-                var noSel = document.getElementById('no-selection');
-                if (noSel) noSel.classList.add('hidden');
+        <div class="flex items-center gap-2 px-6 py-3 mx-6 mb-4 rounded-xl text-xs text-emerald-400" style="background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.15)">
+            <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            Settings persist to the database across restarts
+        </div>
 
-                var panel = document.querySelector('[data-channel="' + username + '"]');
-                if (panel) panel.classList.remove('hidden');
+        <div class="flex justify-end gap-2 px-6 pb-5">
+            <button type="button" onclick="this.closest('dialog').close()" class="btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary">Apply Settings</button>
+        </div>
+    </form>
+</dialog>
 
-                // Highlight selected channel in sidebar
-                document.querySelectorAll('.channel-item').forEach(function(el) {
-                    el.classList.toggle('selected', el.dataset.username === username);
-                });
+<!-- ═══════════════════ ADD CHANNEL DIALOG ═══════════════════ -->
+<dialog id="create-dialog" class="text-zinc-100 rounded-2xl w-full max-w-[540px] max-h-[90vh] overflow-y-auto p-0 border-0 shadow-2xl" style="background:#12121a;border:1px solid rgba(255,255,255,0.08)">
+    <form action="/create_channel" method="POST">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-5" style="border-bottom:1px solid rgba(255,255,255,0.06)">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" style="background:rgba(225,29,72,0.12);border:1px solid rgba(225,29,72,0.2)">
+                    <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>
+                </div>
+                <h2 class="text-base font-bold">Add Channel</h2>
+            </div>
+            <button type="button" onclick="this.closest('dialog').close()"
+                    class="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:text-zinc-300 transition-colors" style="background:rgba(255,255,255,0.04)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
 
-                sessionStorage.setItem('selectedChannel', username);
+        <div class="px-6 py-5 space-y-5">
+            <!-- Username -->
+            <div>
+                <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Channel Username</label>
+                <div class="flex rounded-xl overflow-hidden" style="border:1px solid rgba(255,255,255,0.08)">
+                    <span class="flex items-center px-3 text-[11px] text-zinc-600 shrink-0" style="background:rgba(255,255,255,0.03);border-right:1px solid rgba(255,255,255,0.08)">{{ .Config.Domain }}</span>
+                    <input type="text" name="username" autofocus required
+                           class="flex-1 bg-transparent px-3 py-2.5 text-sm text-zinc-200 focus:outline-none placeholder-zinc-700"
+                           placeholder="username" />
+                </div>
+                <p class="text-[11px] text-zinc-600 mt-1.5">Comma-separate multiple usernames to add them all at once.</p>
+            </div>
 
-                if (!skipMobileFlip && isMobile()) {
-                    setMobileView('detail');
-                    history.pushState({ mobileView: 'detail' }, '');
-                }
+            <!-- Resolution + Framerate side by side -->
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Resolution</label>
+                    <select name="resolution" class="input-field select-field">
+                        <option value="2160" {{ if eq .Config.Resolution 2160 }}selected{{ end }}>4K — 2160p</option>
+                        <option value="1440" {{ if eq .Config.Resolution 1440 }}selected{{ end }}>2K — 1440p</option>
+                        <option value="1080" {{ if eq .Config.Resolution 1080 }}selected{{ end }}>FHD — 1080p</option>
+                        <option value="720"  {{ if eq .Config.Resolution 720  }}selected{{ end }}>HD — 720p</option>
+                        <option value="540"  {{ if eq .Config.Resolution 540  }}selected{{ end }}>540p</option>
+                        <option value="480"  {{ if eq .Config.Resolution 480  }}selected{{ end }}>480p</option>
+                        <option value="240"  {{ if eq .Config.Resolution 240  }}selected{{ end }}>240p</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Framerate</label>
+                    <div class="space-y-2 pt-1">
+                        <label class="flex items-center gap-2.5 text-sm cursor-pointer text-zinc-400 hover:text-zinc-200 transition-colors">
+                            <input type="radio" name="framerate" value="60" {{ if eq .Config.Framerate 60 }}checked{{ end }} class="accent-rose-500" />
+                            60 FPS
+                        </label>
+                        <label class="flex items-center gap-2.5 text-sm cursor-pointer text-zinc-400 hover:text-zinc-200 transition-colors">
+                            <input type="radio" name="framerate" value="30" {{ if eq .Config.Framerate 30 }}checked{{ end }} class="accent-rose-500" />
+                            30 FPS
+                        </label>
+                    </div>
+                </div>
+            </div>
 
-                // Refresh log state
-                var container = panel?.querySelector('.log-container');
-                if (container) {
-                    updateLogCount(container);
-                    applyFilters(container);
-                    scrollLogContainer(container);
-                }
-            }
+            <!-- Pattern -->
+            <div>
+                <label class="block text-xs font-semibold text-zinc-400 mb-2 uppercase tracking-wider">Filename Pattern</label>
+                <input type="text" name="pattern" value="{{ .Config.Pattern }}" class="input-field" />
+                <p class="text-[11px] text-zinc-600 mt-1.5">See the <a class="text-rose-400 hover:text-rose-300 underline" href="https://github.com/teacat/chaturbate-dvr" target="_blank">README</a> for template variables.</p>
+            </div>
 
-            // === Recording counter ===
-            function updateRecordingCount() {
-                var count = document.querySelectorAll('[data-status="recording"]').length;
-                var el = document.getElementById('recording-counter');
-                if (count > 0) {
-                    el.textContent = count + ' Recording';
-                } else {
-                    el.textContent = 'No Recording';
-                }
-            }
+            <!-- Divider -->
+            <div style="height:1px;background:rgba(255,255,255,0.05)"></div>
 
-            // === Sidebar order (mirrors manager.ChannelInfo sort) ===
-            function channelPriority(status, isOnline) {
-                if (status === 'recording') return 0;
-                if (status === 'paused') return isOnline ? 2 : 3;
-                return 1;
-            }
+            <!-- Splitting -->
+            <div>
+                <label class="block text-xs font-semibold text-zinc-400 mb-3 uppercase tracking-wider">Splitting Options</label>
+                <div class="grid grid-cols-2 gap-3 p-4 rounded-xl" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)">
+                    <div>
+                        <label class="block text-[11px] font-medium text-zinc-500 mb-1.5">Max Duration (min)</label>
+                        <input type="number" name="max_duration" value="{{ .Config.MaxDuration }}" min="0" class="input-field" style="padding:8px 12px" />
+                        <p class="text-[10px] text-zinc-700 mt-1">0 = disabled</p>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-medium text-zinc-500 mb-1.5">Max Filesize (MB)</label>
+                        <input type="number" name="max_filesize" value="{{ .Config.MaxFilesize }}" min="0" class="input-field" style="padding:8px 12px" />
+                        <p class="text-[10px] text-zinc-700 mt-1">0 = disabled</p>
+                    </div>
+                </div>
+            </div>
 
-            function resortChannels() {
-                var items = Array.from(document.querySelectorAll('.channel-item'));
-                if (!items.length) return;
-                var container = document.getElementById('channel-list');
-                if (!container) return;
-                items.sort(function(a, b) {
-                    var pa = parseInt(a.dataset.priority || '1', 10);
-                    var pb = parseInt(b.dataset.priority || '1', 10);
-                    if (pa !== pb) return pa - pb;
-                    return a.dataset.username.toLowerCase().localeCompare(b.dataset.username.toLowerCase());
-                });
-                items.forEach(function(el) { container.appendChild(el); });
-            }
+            <!-- Compress -->
+            <label class="flex items-center gap-3 cursor-pointer p-3 rounded-xl transition-colors hover:bg-white/[0.02]" style="border:1px solid rgba(255,255,255,0.06)">
+                <input type="checkbox" name="compress" value="true" {{ if .Config.Compress }}checked{{ end }} class="w-4 h-4 accent-rose-500 rounded" />
+                <div>
+                    <div class="text-sm font-medium text-zinc-300">Compress with ffmpeg</div>
+                    <div class="text-[11px] text-zinc-600 mt-0.5">Convert recordings to .mkv after capture</div>
+                </div>
+            </label>
+        </div>
 
-            // === Sidebar dot sync ===
-            function updateSidebarDot(username, status, isOnline, roomStatus) {
-                var dot = document.querySelector('[data-status-dot="' + username + '"]');
-                if (!dot) return;
-                dot.className = 'w-2 h-2 rounded-full shrink-0';
+        <div class="flex justify-end gap-2 px-6 pb-5">
+            <button type="button" onclick="this.closest('dialog').close()" class="btn-secondary">Cancel</button>
+            <button type="submit" class="btn-primary flex items-center gap-2">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 5v14m-7-7h14"/></svg>
+                Add Channel
+            </button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+// ════════════════════════════════════════════════════
+// DARK MODE
+// ════════════════════════════════════════════════════
+function toggleDarkMode() {
+    var isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('darkMode', isDark ? 'true' : 'false');
+}
+
+// ════════════════════════════════════════════════════
+// CHANNEL SELECTION
+// ════════════════════════════════════════════════════
+function selectChannel(username) {
+    document.querySelectorAll('.channel-item').forEach(function(el) { el.classList.remove('selected'); });
+    document.querySelectorAll('.channel-detail').forEach(function(el) { el.classList.add('hidden'); el.classList.remove('flex'); });
+    var item = document.querySelector('.channel-item[data-username="' + username + '"]');
+    if (item) item.classList.add('selected');
+    var detail = document.querySelector('.channel-detail[data-channel="' + username + '"]');
+    if (detail) { detail.classList.remove('hidden'); detail.classList.add('flex'); }
+    var noSel = document.getElementById('no-selection');
+    if (noSel) noSel.classList.add('hidden');
+    localStorage.setItem('selectedChannel', username);
+}
+
+(function() {
+    var last = localStorage.getItem('selectedChannel');
+    if (last && document.querySelector('.channel-detail[data-channel="' + last + '"]')) {
+        selectChannel(last);
+    } else {
+        var first = document.querySelector('.channel-item');
+        if (first) selectChannel(first.dataset.username);
+    }
+})();
+
+// ════════════════════════════════════════════════════
+// LOG RENDERER — parses "15:04 [LEVEL] message" format
+// ════════════════════════════════════════════════════
+
+// Parse raw log string into parts
+function parseLog(raw) {
+    var m = raw.match(/^(\d{2}:\d{2})\s+\[(\w+)\]\s+([\s\S]*)$/);
+    if (m) return { time: m[1], level: m[2].toUpperCase(), msg: m[3] };
+    return { time: '', level: 'INFO', msg: raw };
+}
+
+// Map message prefix → { type, color }
+var LOG_MSG_RULES = [
+    { re: /^starting to record/i,              type: 'play',     color: '#34d399' },
+    { re: /^channel resumed/i,                 type: 'play',     color: '#34d399' },
+    { re: /^channel (?:paused|stopped)/i,      type: 'stop',     color: '#fb7185' },
+    { re: /^blocked by Cloudflare/i,           type: 'cf',       color: '#fb923c' },
+    { re: /^paused status check blocked/i,     type: 'cf',       color: '#fb923c' },
+    { re: /^upload:/i,                         type: 'upload',   color: '#60a5fa' },
+    { re: /^compress:/i,                       type: 'compress', color: '#c084fc' },
+    { re: /^mux:/i,                            type: 'mux',      color: '#22d3ee' },
+    { re: /^delete:/i,                         type: 'delete',   color: '#f87171' },
+    { re: /^output-dir:/i,                     type: 'file',     color: '#fbbf24' },
+    { re: /^max filesize or duration/i,        type: 'file',     color: '#fbbf24' },
+    { re: /^new file created/i,                type: 'file',     color: '#fbbf24' },
+    { re: /^stream quality/i,                  type: 'status',   color: '#2dd4bf' },
+    { re: /^channel status:/i,                 type: 'status',   color: '#2dd4bf' },
+    { re: /^channel is /i,                     type: 'status',   color: '#2dd4bf' },
+    { re: /^detected separate audio/i,         type: 'status',   color: '#a78bfa' },
+    { re: /^channel was paused/i,              type: 'status',   color: '#a78bfa' },
+    { re: /^duration:/i,                       type: 'info',     color: '#3f3f46' },
+];
+
+var LOG_LEVEL_STYLE = {
+    'ERROR': { text: '#ef4444', msgColor: '#f87171', type: 'error' },
+    'WARN':  { text: '#f59e0b', msgColor: '#fbbf24', type: 'error' },
+    'INFO':  { text: '#2e2e34', msgColor: null,      type: null    },
+};
+
+function getLogMeta(level, msg) {
+    var ls = LOG_LEVEL_STYLE[level] || LOG_LEVEL_STYLE['INFO'];
+    // ERROR/WARN always use level color
+    if (ls.type === 'error') return { type: ls.type, msgColor: ls.msgColor, levelStyle: ls };
+    // Otherwise check message prefix rules
+    for (var i = 0; i < LOG_MSG_RULES.length; i++) {
+        if (LOG_MSG_RULES[i].re.test(msg)) {
+            return { type: LOG_MSG_RULES[i].type, msgColor: LOG_MSG_RULES[i].color, levelStyle: ls };
+        }
+    }
+    return { type: 'info', msgColor: '#3a3a3f', levelStyle: ls };
+}
+
+// Highlight keywords within a message string (returns HTML)
+function highlightMsg(msg, baseColor) {
+    // Escape HTML first
+    var safe = msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    // Backtick strings → orange mono
+    safe = safe.replace(/`([^`]+)`/g, '<span style="color:#fb923c;font-family:ui-monospace,monospace;background:rgba(251,146,60,0.08);padding:0 3px;border-radius:3px">$1</span>');
+    // File names (e.g. foo.mp4, bar.ts) → amber mono
+    safe = safe.replace(/\b([\w.\-]+\.(?:ts|mp4|mkv|webm|avi|mov))\b/g, '<span style="color:#fbbf24;font-family:ui-monospace,monospace">$1</span>');
+    // Sizes: 1.2 MB / 512 KB → cyan
+    safe = safe.replace(/(\d+(?:\.\d+)?)\s*(KB|MB|GB|TB|B)\b/g, '<span style="color:#22d3ee;font-weight:600">$1 $2</span>');
+    // Durations HH:MM:SS or MM:SS → cyan
+    safe = safe.replace(/\b(\d{1,2}:\d{2}(?::\d{2})?)\b/g, '<span style="color:#22d3ee;font-weight:600">$1</span>');
+    // Resolution Np (e.g. 1080p, 720p) → violet
+    safe = safe.replace(/\b(\d{3,4})p\b/g, '<span style="color:#a78bfa;font-weight:600">$1p</span>');
+    // FPS → violet
+    safe = safe.replace(/\b(\d+)fps\b/g, '<span style="color:#a78bfa;font-weight:600">$1fps</span>');
+    // Percentages → yellow
+    safe = safe.replace(/\b(\d+(?:\.\d+)?%)/g, '<span style="color:#fde047;font-weight:600">$1</span>');
+    // Numbers in parens like (attempt 3) → dim yellow
+    safe = safe.replace(/\(attempt (\d+)\)/g, '<span style="color:#a16207">(attempt $1)</span>');
+    // Retry countdown → dim
+    safe = safe.replace(/retry in (\d+) min/g, 'retry in <span style="color:#71717a">$1 min</span>');
+    safe = safe.replace(/try again in (\d+) min/g, 'try again in <span style="color:#71717a">$1 min</span>');
+    return safe;
+}
+
+// Build the full HTML for one log line
+function renderLogLine(raw) {
+    if (!raw || !raw.trim()) return null;
+    var p = parseLog(raw.trim());
+    var meta = getLogMeta(p.level, p.msg);
+    var ls = meta.levelStyle;
+    var msgColor = meta.msgColor || '#3f3f46';
+
+    var html = '<div class="log-line log-type-' + meta.type + '">';
+    // Timestamp
+    if (p.time) {
+        html += '<span class="log-time">' + p.time + '</span>';
+    }
+    // Level as plain terminal bracket text
+    html += '<span class="log-level" style="color:' + ls.text + '">[' + p.level + ']</span>';
+    // Message
+    html += '<span class="log-msg" style="color:' + msgColor + '">' + highlightMsg(p.msg, msgColor) + '</span>';
+    html += '</div>';
+    return html;
+}
+
+// Append a rendered log line to a container
+function appendLog(container, rawText, animate) {
+    var html = renderLogLine(rawText);
+    if (!html) return null;
+
+    // Trim excess lines (keep last 500)
+    var lines = container.querySelectorAll('.log-line');
+    if (lines.length >= 500) {
+        for (var i = 0; i < lines.length - 499; i++) lines[i].remove();
+    }
+
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    var line = tmp.firstElementChild;
+    if (!line) return null;
+
+    if (animate) {
+        line.classList.add('log-new');
+        setTimeout(function() { line.classList.remove('log-new'); }, 300);
+    }
+
+    container.appendChild(line);
+    return line;
+}
+
+// Apply current active filter to a single line
+function applyLineFilter(container, line) {
+    var panel = container.closest('.flex-col');
+    if (!panel) return;
+    var activeBtn = panel.querySelector('.log-filter-btn.active, .log-filter-dot.active');
+    if (!activeBtn) return;
+    var filter = activeBtn.dataset.filter;
+    if (!filter || filter === 'all') {
+        line.classList.remove('log-filtered');
+    } else if (line.classList.contains('log-type-' + filter)) {
+        line.classList.remove('log-filtered');
+    } else {
+        line.classList.add('log-filtered');
+    }
+}
+
+// Update entry count display
+function updateLogCount(container) {
+    var username = container.id.replace('-log-container', '');
+    var cnt = document.getElementById(username + '-log-count');
+    if (cnt) {
+        var visible = container.querySelectorAll('.log-line:not(.log-filtered)').length;
+        var total   = container.querySelectorAll('.log-line').length;
+        cnt.textContent = visible === total ? total + ' entries' : visible + ' / ' + total;
+    }
+}
+
+// ════════════════════════════════════════════════════
+// RECORDING COUNTER
+// ════════════════════════════════════════════════════
+function updateRecordingCounter() {
+    var count = document.querySelectorAll('.channel-item[data-priority="0"]').length;
+    var el = document.getElementById('recording-counter');
+    if (el) el.textContent = count > 0 ? count + ' recording' + (count > 1 ? 's' : '') : '';
+}
+updateRecordingCounter();
+
+// ════════════════════════════════════════════════════
+// SSE MESSAGE HANDLER — single listener for all events
+// ════════════════════════════════════════════════════
+document.addEventListener('htmx:sseMessage', function(e) {
+    var eventName = e.detail.type || '';
+    var parts     = eventName.split('-');
+    if (parts.length < 2) return;
+
+    var suffix   = parts[parts.length - 1];          // "info" or "log"
+    var username = parts.slice(0, -1).join('-');      // everything before last "-"
+
+    // ── INFO panel updated via sse-swap → sync sidebar dot/badge ──
+    if (suffix === 'info') {
+        // Give HTMX a tick to finish its sse-swap DOM update
+        setTimeout(function() {
+            var infoEl = document.querySelector('[sse-swap="' + username + '-info"]');
+            if (!infoEl) return;
+            var statusEl = infoEl.querySelector('[data-status]');
+            if (!statusEl) return;
+
+            var status     = statusEl.dataset.status;
+            var roomStatus = statusEl.dataset.roomStatus || '';
+            var dot  = document.querySelector('[data-status-dot="' + username + '"]');
+            var text = document.querySelector('[data-status-text="' + username + '"]');
+            var item = document.querySelector('.channel-item[data-username="' + username + '"]');
+
+            if (dot) {
                 if (status === 'recording') {
-                    dot.classList.add('bg-green-500', 'shadow-[0_0_6px_rgba(34,197,94,0.5)]', 'rec-pulse');
+                    dot.className = 'w-2 h-2 rounded-full block bg-emerald-400 rec-pulse';
+                    if (item) item.dataset.priority = '0';
                 } else if (status === 'paused') {
-                    dot.classList.add('bg-red-500');
+                    dot.className = 'w-2 h-2 rounded-full block bg-rose-500';
+                    if (item) item.dataset.priority = '3';
                 } else {
-                    dot.classList.add('bg-zinc-600');
-                }
-                var textEl = document.querySelector('[data-status-text="' + username + '"]');
-                if (textEl) {
-                    if (status === 'recording') {
-                        textEl.textContent = 'Rec';
-                    } else {
-                        textEl.textContent = roomStatus || '';
-                    }
+                    dot.className = 'w-2 h-2 rounded-full block bg-zinc-600';
+                    if (item) item.dataset.priority = '1';
                 }
             }
-
-            // === Log helpers ===
-            var icons = {
-                play: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,3 20,12 6,21"/></svg>',
-                stop: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>',
-                error: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4m0 4h.01"/></svg>',
-                compress: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15v3a2 2 0 002 2h12a2 2 0 002-2v-3M12 3v12m0 0l-4-4m4 4l4-4"/></svg>',
-                mux: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 00-2 2v14a2 2 0 002 2h3M16 3h3a2 2 0 012 2v14a2 2 0 01-2 2h-3M12 20v2m0-2v-2m0 2h-2m2 0h2"/></svg>',
-                file: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
-                upload: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>',
-                delete: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>',
-                cf: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
-                status: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
-                info: '<svg class="log-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>'
-            };
-            function escapeHtml(str) {
-                var d = document.createElement('div');
-                d.textContent = str;
-                return d.innerHTML;
-            }
-            function parseLogLine(text) {
-                var m = text.match(/^(\d{2}:\d{2})\s+\[(INFO|ERROR)\]\s+(.*)$/);
-                if (m) return { time: m[1], level: m[2], msg: m[3] };
-                return null;
-            }
-            function getLogType(level, msg) {
-                if (level === 'ERROR') return 'error';
-                var l = msg.toLowerCase();
-                if (l.indexOf('starting to record') !== -1 || l.indexOf('channel resumed') !== -1) return 'play';
-                if (l.indexOf('channel paused') !== -1 || l.indexOf('channel stopped') !== -1 || l.indexOf('channel was paused') !== -1) return 'stop';
-                if (l.indexOf('compress:') !== -1) return 'compress';
-                if (l.indexOf('mux') !== -1) return 'mux';
-                if (l.indexOf('cloudflare') !== -1) return 'cf';
-                if (l.indexOf('delete') !== -1 || l.indexOf('remov') !== -1) return 'delete';
-                if (l.indexOf('upload') !== -1) return 'upload';
-                if (l.indexOf('output-dir:') !== -1 || l.indexOf('new file created') !== -1 || l.indexOf('max filesize') !== -1) return 'file';
-                if (l.indexOf('stream quality') !== -1 || l.indexOf('duration:') !== -1 || l.indexOf('filesize:') !== -1 || l.indexOf('channel status') !== -1 || l.indexOf('channel is ') !== -1) return 'status';
-                if (l.indexOf('on retry') !== -1 || l.indexOf('failed') !== -1) return 'error';
-                return 'info';
-            }
-            function renderLogEntry(parsed, type, fallbackText) {
-                if (!parsed) {
-                    var ft = escapeHtml(fallbackText || '');
-                    return '<span class="log-icon">' + icons.info + '</span><span class="log-msg" title="' + ft + '">' + ft + '</span>';
-                }
-                var msg = escapeHtml(parsed.msg);
-                return '<span class="log-time" title="' + parsed.time + '">' + parsed.time + '</span>'
-                    + '<span class="log-icon">' + (icons[type] || icons.info) + '</span>'
-                    + '<span class="log-level">' + parsed.level + '</span>'
-                    + '<span class="log-msg" title="' + msg + '">' + msg + '</span>';
-            }
-            function appendStyledLogEntry(container, text, animate) {
-                var div = document.createElement('div');
-                var parsed = parseLogLine(text);
-                var type = parsed ? getLogType(parsed.level, parsed.msg) : 'info';
-                div.className = 'log-line log-type-' + type;
-                if (parsed) {
-                    div.innerHTML = renderLogEntry(parsed, type);
+            if (text) {
+                if (status === 'recording') {
+                    text.textContent = 'Rec';
+                    text.className = 'text-[9px] font-bold uppercase tracking-widest shrink-0 text-emerald-500';
                 } else {
-                    div.innerHTML = renderLogEntry(null, 'info', text);
+                    text.textContent = roomStatus;
+                    text.className = 'text-[9px] font-bold uppercase tracking-widest shrink-0 text-zinc-600';
                 }
-                div.dataset.received = Date.now();
-                if (animate !== false) {
-                    div.classList.add('log-new', 'log-flash');
-                    div.addEventListener('animationend', function onEnd(e) {
-                        if (e.animationName === 'log-slide-in') {
-                            div.classList.remove('log-new');
-                            div.removeEventListener('animationend', onEnd);
-                        }
-                    });
-                }
-                container.appendChild(div);
-                updateLogCount(container);
-                applyFilters(container);
             }
-            function scrollLogContainer(container) {
-                container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-            }
-            function styleExistingLogs() {
-                document.querySelectorAll('.log-container .log-line').forEach(function(el) {
-                    var parsed = parseLogLine(el.textContent);
-                    if (parsed) {
-                        var type = getLogType(parsed.level, parsed.msg);
-                        el.className = 'log-line log-type-' + type;
-                        el.innerHTML = renderLogEntry(parsed, type);
-                    } else {
-                        el.className = 'log-line log-type-info';
-                        el.innerHTML = '<span class="log-icon">' + icons.info + '</span><span class="log-msg">' + escapeHtml(el.textContent) + '</span>';
-                    }
-                    if (!el.dataset.received) el.dataset.received = Date.now();
-                });
-            }
+            updateRecordingCounter();
+        }, 50);
+        return;
+    }
 
-            // ── Log filter ──
-            document.addEventListener('click', function(e) {
-                var btn = e.target.closest('.log-filter-btn, .log-filter-dot, .log-filter-clear');
-                if (!btn) return;
-                var panel = btn.closest('.channel-detail') || btn.closest('.flex-1');
-                var container = panel?.querySelector('.log-container');
-                if (!container) return;
+    // ── LOG line appended in JS — sse-swap NOT used on log container ──
+    if (suffix === 'log') {
+        var rawText = e.detail.data || '';
+        if (!rawText.trim()) return;
 
-                if (btn.classList.contains('log-filter-clear')) {
-                    container.innerHTML = '';
-                    updateLogCount(container);
-                    return;
-                }
+        var container = document.getElementById(username + '-log-container');
+        if (!container) return;
 
-                var filter = btn.dataset.filter;
-                var parent = btn.parentElement;
+        var line = appendLog(container, rawText, true);
+        if (line) {
+            applyLineFilter(container, line);
+            updateLogCount(container);
+        }
 
-                if (filter === 'all') {
-                    parent.querySelectorAll('.log-filter-btn, .log-filter-dot').forEach(function(b) { b.classList.remove('active'); });
-                    btn.classList.add('active');
-                    parent.querySelectorAll('.log-filter-dot').forEach(function(b) { b.classList.remove('active'); });
-                    container.querySelectorAll('.log-line').forEach(function(el) { el.classList.remove('log-filtered'); });
-                } else {
-                    parent.querySelector('.log-filter-btn')?.classList.remove('active');
-                    btn.classList.toggle('active');
-                    var anyActive = parent.querySelector('.log-filter-dot.active') !== null;
-                    container.querySelectorAll('.log-line').forEach(function(el) {
-                        if (!anyActive) { el.classList.remove('log-filtered'); return; }
-                        el.classList.toggle('log-filtered', !el.classList.contains('log-type-' + filter));
-                    });
-                }
-                updateLogCount(container);
-            });
+        // Auto-scroll if enabled
+        var panel = container.closest('.flex-1.min-w-0');
+        var toggle = panel && panel.querySelector('.log-scroll-toggle');
+        if (!toggle || toggle.checked) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+});
 
-            function applyFilters(container) {
-                var panel = container.closest('.channel-detail') || container.closest('.flex-1');
-                if (!panel) return;
-                var parent = panel.querySelector('.flex.items-center.gap-1');
-                if (!parent) return;
-                var allBtn = parent.querySelector('.log-filter-btn');
-                var activeDot = parent.querySelector('.log-filter-dot.active');
-                if (!allBtn || allBtn.classList.contains('active') || !activeDot) {
-                    container.querySelectorAll('.log-line').forEach(function(el) { el.classList.remove('log-filtered'); });
-                    return;
-                }
-                var filter = activeDot.dataset.filter;
-                container.querySelectorAll('.log-line').forEach(function(el) {
-                    el.classList.toggle('log-filtered', !el.classList.contains('log-type-' + filter));
-                });
-            }
+// ════════════════════════════════════════════════════
+// FILTER BUTTONS
+// ════════════════════════════════════════════════════
+function applyFilter(bar, filter) {
+    bar.querySelectorAll('.log-filter-btn, .log-filter-dot').forEach(function(b) { b.classList.remove('active'); });
+    var container = bar.querySelector('.log-container');
+    if (!container) return;
+    container.querySelectorAll('.log-line').forEach(function(line) {
+        if (filter === 'all' || line.classList.contains('log-type-' + filter)) {
+            line.classList.remove('log-filtered');
+        } else {
+            line.classList.add('log-filtered');
+        }
+    });
+    updateLogCount(container);
+}
 
-            function updateLogCount(container) {
-                var panel = container.closest('.channel-detail') || container.closest('.flex-1');
-                if (!panel) return;
-                var total = container.querySelectorAll('.log-line').length;
-                var visible = container.querySelectorAll('.log-line:not(.log-filtered)').length;
-                var el = panel.querySelector('[id$="-log-count"]');
-                if (el) el.textContent = visible + ' / ' + total + ' logs';
-            }
+document.querySelectorAll('.log-filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var bar = this.closest('.flex-col');
+        applyFilter(bar, this.dataset.filter);
+        this.classList.add('active');
+    });
+});
 
-            // ── Relative timestamps ──
-            function updateRelativeTimestamps() {
-                var containers = document.querySelectorAll('.log-container:not(:empty)');
-                if (!containers.length) return;
-                containers.forEach(function(c) {
-                    c.querySelectorAll('.log-line .log-time').forEach(function(el) {
-                        var line = el.closest('.log-line');
-                        var received = parseInt(line?.dataset.received, 10);
-                        if (!received) return;
-                        var diff = Math.floor((Date.now() - received) / 1000);
-                        var text;
-                        if (diff < 5) text = 'now';
-                        else if (diff < 60) text = diff + 's';
-                        else if (diff < 3600) text = Math.floor(diff / 60) + 'm';
-                        else if (diff < 86400) text = Math.floor(diff / 3600) + 'h';
-                        else text = Math.floor(diff / 86400) + 'd';
-                        if (el.textContent !== text) el.textContent = text;
-                    });
-                });
-            }
-            setInterval(updateRelativeTimestamps, 5000);
+document.querySelectorAll('.log-filter-dot').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var bar = this.closest('.flex-col');
+        applyFilter(bar, this.dataset.filter);
+        this.classList.add('active');
+    });
+});
 
-            // === SSE event handlers ===
-            document.body.addEventListener("htmx:sseBeforeMessage", function(e) {
-                var sseId = e.detail.elt.getAttribute('sse-swap');
-                if (sseId && sseId.endsWith("-log")) {
-                    e.preventDefault();
-                    var username = sseId.replace("-log", "");
-                    var container = document.getElementById(username + "-log-container");
-                    if (container) {
-                        appendStyledLogEntry(container, e.detail.data, true);
-                        var panel = container.closest("[data-channel]");
-                        var toggle = panel && panel.querySelector(".log-scroll-toggle");
-                        if (!toggle || toggle.checked) {
-                            scrollLogContainer(container);
-                        }
-                    }
-                }
-            });
+document.querySelectorAll('.log-filter-clear').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var container = this.closest('.flex-col').querySelector('.log-container');
+        if (container) { container.innerHTML = ''; updateLogCount(container); }
+    });
+});
 
-            document.body.addEventListener("htmx:sseMessage", function(e) {
-                var sseId = e.detail.elt.getAttribute('sse-swap');
-                if (sseId && sseId.endsWith("-info")) {
-                    var username = sseId.replace("-info", "");
-                    var statusEl = e.detail.elt.querySelector("[data-status]");
-                    if (statusEl) {
-                        var status = statusEl.dataset.status;
-                        var isOnline = statusEl.dataset.online === 'true';
-                        updateSidebarDot(username, status, isOnline, statusEl.dataset.roomStatus || '');
-                        var item = document.querySelector('.channel-item[data-username="' + username + '"]');
-                        if (item) {
-                            var newPriority = String(channelPriority(status, isOnline));
-                            if (item.dataset.priority !== newPriority) {
-                                item.dataset.priority = newPriority;
-                                resortChannels();
-                            }
-                        }
-                    }
-                    updateRecordingCount();
-                }
-            });
+// ════════════════════════════════════════════════════
+// INIT — render existing [data-raw] log lines on load
+// ════════════════════════════════════════════════════
+document.querySelectorAll('.log-container').forEach(function(container) {
+    // Re-render each placeholder div that has a data-raw attribute
+    container.querySelectorAll('[data-raw]').forEach(function(placeholder) {
+        var raw = placeholder.getAttribute('data-raw');
+        if (!raw) { placeholder.remove(); return; }
+        var html = renderLogLine(raw);
+        if (html) {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = html;
+            var line = tmp.firstElementChild;
+            if (line) container.insertBefore(line, placeholder);
+        }
+        placeholder.remove();
+    });
 
-            // === Dark mode ===
-            function toggleDarkMode() {
-                var isDark = document.documentElement.classList.toggle('dark');
-                localStorage.setItem('darkMode', isDark ? 'true' : 'false');
-            }
+    // Scroll to bottom
+    container.scrollTop = container.scrollHeight;
 
-            // === Init on page load ===
-            document.addEventListener("DOMContentLoaded", function() {
-                updateRecordingCount();
-
-                // First load always lands on the channel list — skip the mobile flip into detail view.
-                var saved = sessionStorage.getItem('selectedChannel');
-                if (saved && document.querySelector('[data-channel="' + saved + '"]')) {
-                    selectChannel(saved, true);
-                } else {
-                    sessionStorage.removeItem('selectedChannel');
-                    var first = document.querySelector('.channel-dropdown-item');
-                    if (first) selectChannel(first.dataset.username, true);
-                }
-
-                styleExistingLogs();
-
-                document.querySelectorAll(".log-container").forEach(function(c) {
-                    scrollLogContainer(c);
-                    updateLogCount(c);
-                });
-            });
-        </script>
-    </body>
+    // Initial count
+    updateLogCount(container);
+});
+</script>
+</body>
 </html>
