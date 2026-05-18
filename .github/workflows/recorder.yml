@@ -169,24 +169,37 @@ jobs:
           set -euo pipefail
 
           echo "Waiting for recorder web UI..."
-          for attempt in {1..45}; do
+          RESTART_COUNT=0
+          for attempt in {1..60}; do
             if curl -fsS --max-time 5 "$APP_URL" >/dev/null 2>/dev/null; then
               echo "Web UI is ready"
               exit 0
             fi
 
-            if ! docker compose ps --services | grep -qx "chaturbate-dvr"; then
-              echo "chaturbate-dvr stopped before becoming ready"
-              docker compose logs --tail=100 chaturbate-dvr
-              exit 1
+            # Check if container is in restart loop
+            CH_COUNT="$(docker compose ps --format json chaturbate-dvr 2>/dev/null | grep -o '"RestartCount":[0-9]*' | grep -oP '[0-9]+' || echo '0')"
+            if [[ "$CH_COUNT" != "0" && "$CH_COUNT" != "$RESTART_COUNT" && "$CH_COUNT" != "0" ]]; then
+              RESTART_COUNT="$CH_COUNT"
+              echo "  chaturbate-dvr restart #${CH_COUNT} — recent logs:"
+              docker compose logs --tail=20 chaturbate-dvr 2>/dev/null || true
+            fi
+
+            if (( attempt % 10 == 0 )); then
+              elapsed=$(( attempt * 2 ))
+              echo "  [${elapsed}s] still waiting — checking container state..."
+              docker compose ps chaturbate-dvr --format json 2>/dev/null | head -3 || true
             fi
 
             sleep 2
           done
 
           echo "Web UI did not become ready in time"
+          echo "=== Container status ==="
           docker compose ps
-          docker compose logs --tail=150 chaturbate-dvr
+          echo "=== Port mappings ==="
+          docker port chaturbate-dvr 2>/dev/null || echo "  (no port info)"
+          echo "=== Recent logs ==="
+          docker compose logs --tail=100 chaturbate-dvr
           exit 1
 
       - name: Install cloudflared
