@@ -285,11 +285,14 @@ func FetchStreamViaFlareSolverr(ctx context.Context, username string, roomInfo *
                 roomInfo.NumUsers = apiBody.NumUsers
         }
 
-        if hlsURL != "" {
-                return hlsURL, roomStatus, nil
-        }
+	if hlsURL != "" {
+		return hlsURL, roomStatus, nil
+	}
 
-        // Step 4: POST may return public with empty hls_source; try GET chatvideocontext.
+	// Debug: log raw body when POST API returned no hls_source
+	fmt.Printf("[DEBUG] PostChaturbateAPI returned empty hls_source/url for %s (room_status=%q). Raw body: %s\n", username, roomStatus, body)
+
+	// Step 4: POST may return public with empty hls_source; try GET chatvideocontext.
         if roomStatus == "public" {
                 if hlsURL, roomStatus, apiBody, err = fetchHLSSourceViaGET(ctx, username); err != nil {
                         return "", "", err

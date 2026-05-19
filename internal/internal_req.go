@@ -124,6 +124,12 @@ func SetRequestHeaders(req *http.Request) {
 			req.AddCookie(&http.Cookie{Name: name, Value: value})
 		}
 	}
+
+	domain := strings.TrimRight(server.Config.Domain, "/")
+	if domain != "" {
+		req.Header.Set("Origin", domain)
+		req.Header.Set("Referer", domain+"/")
+	}
 }
 
 // ParseCookies converts a cookie string into a map.
