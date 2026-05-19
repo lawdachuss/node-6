@@ -311,9 +311,39 @@ If this project helps you, consider giving it a :star::
 
 ---
 
+## :trophy: Credits & Acknowledgements
+
+<div align="center">
+
+### Original Creator
+
+**[TeaCat](https://github.com/teacat)** — the brilliant mind behind the original [chaturbate-dvr](https://github.com/teacat/chaturbate-dvr)
+
+Without TeaCat's foundational work, none of this would exist. The core recording engine, HLS capture logic, and initial architecture are all thanks to their dedication. This project continues their vision with extended features.
+
+<br/>
+
+<a href="https://github.com/teacat/chaturbate-dvr">
+  <img src="https://img.shields.io/badge/⭐_Original_Project-teacat%2Fchaturbate--dvr-ffd700?style=for-the-badge&logo=github&logoColor=white" alt="Original Project" />
+</a>
+
+<br/><br/>
+
+### Also Thanks To
+
+| Project | Purpose |
+|---------|---------|
+| [Byparr](https://github.com/ThePhaseless/Byparr) | Cloudflare bypass engine |
+| [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) | Public dashboard tunneling |
+| [Twemoji](https://github.com/jdecked/twemoji) | UI favicon |
+
+</div>
+
+---
+
 ## :scroll: License
 
-[MIT](LICENSE) — free to use, modify, and distribute.
+[MIT](LICENSE) — originally by [TeaCat](https://github.com/teacat) (2024), continued here.
 
 <div align="center">
   <sub>Built with :heart: in 2026</sub>
