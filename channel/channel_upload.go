@@ -130,9 +130,14 @@ func (ch *Channel) uploadFile(filePath string, thumbURL, spriteURL string) bool 
                         ch.Info("upload: saved recording metadata to Supabase for %s", filename)
                 }
 
-                // Only delete local file if at least one DB write succeeded — prevents
-                // losing the file when Supabase is down or returns an error.
-                if server.Config != nil && server.Config.DeleteLocalAfterUpload && dbSaved {
+                // Delete local file once at least one host has the file safely.
+                // We do NOT gate deletion on dbSaved — if Supabase is down the
+                // file is still on the remote host, and keeping it locally would
+                // cause CleanupOrphanedFiles to re-upload it on every restart.
+                if server.Config != nil && server.Config.DeleteLocalAfterUpload {
+                        if !dbSaved {
+                                ch.Warn("upload: Supabase save failed — deleting local copy anyway (file is on remote host)")
+                        }
                         _ = os.Remove(filePath)
                         // Also clean up any associated preview sidecar files
                         for _, suffix := range []string{".thumb.jpg", ".sprite.jpg", ".thumb", ".sprite"} {

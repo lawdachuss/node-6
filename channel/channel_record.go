@@ -52,15 +52,14 @@ func (ch *Channel) Monitor() {
                                         ch.Info("channel is %s, try again in %d min(s)", ch.RoomStatus, server.Config.Interval)
                                 }
 
-                                // If the channel went offline while we have an active file, finalize
-                                // it so post-processing (thumbnail, upload, DB save, deletion) can run.
-                                if errors.Is(err, internal.ErrChannelOffline) && ch.File != nil {
-                                        go func() {
-                                                if cerr := ch.Cleanup(false); cerr != nil {
-                                                        ch.Error("cleanup on offline: %s", cerr.Error())
-                                                }
-                                        }()
-                                }
+                                // NOTE: no extra Cleanup call here.
+                                // RecordStream's deferred Cleanup(false) always runs before
+                                // onRetry is called (defers execute before the function returns
+                                // to the retry loop). ch.File is therefore always nil at this
+                                // point. Launching a goroutine here was redundant dead-code and
+                                // caused a race: if the goroutine was delayed by the scheduler
+                                // it could fire after the next RecordStream had already opened
+                                // new files, closing and uploading them prematurely.
                         } else if errors.Is(err, internal.ErrStreamStalled) {
                                 // CDN session expired mid-stream (common with LL-HLS tokens).
                                 // The current file has already been finalised by the deferred
