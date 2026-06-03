@@ -163,6 +163,8 @@ func (ch *Channel) RecordStream(ctx context.Context, client *chaturbate.Client) 
 	ch.AudioInitSegment = nil
 	ch.HasSeparateAudio = playlist.AudioPlaylistURL != ""
 	ch.switchRequested = false
+	ch.videoSegmentCount = 0
+	ch.audioSegmentCount = 0
 
 	if err := ch.NextFile(); err != nil {
 		return fmt.Errorf("next file: %w", err)
@@ -244,10 +246,24 @@ func (ch *Channel) HandleSegment(b []byte, duration float64) error {
 	ch.stateMu.Lock()
 	ch.Filesize += n
 	ch.Duration += duration
+	ch.videoSegmentCount++
 	dur := ch.Duration
 	fs := ch.Filesize
+	vSegCount := ch.videoSegmentCount
+	aSegCount := ch.audioSegmentCount
 	ch.stateMu.Unlock()
-	ch.Info("duration: %s, filesize: %s", internal.FormatDuration(dur), internal.FormatFilesize(fs))
+
+	// Log A/V sync status for dual-stream recordings
+	if ch.HasSeparateAudio {
+		segDiff := vSegCount - aSegCount
+		if segDiff != 0 {
+			ch.Info("duration: %s, filesize: %s [v:%d a:%d Δ%+d]", internal.FormatDuration(dur), internal.FormatFilesize(fs), vSegCount, aSegCount, segDiff)
+		} else {
+			ch.Info("duration: %s, filesize: %s [v:%d a:%d synced]", internal.FormatDuration(dur), internal.FormatFilesize(fs), vSegCount, aSegCount)
+		}
+	} else {
+		ch.Info("duration: %s, filesize: %s", internal.FormatDuration(dur), internal.FormatFilesize(fs))
+	}
 
 	// Send an SSE update to update the view
 	ch.Update()
@@ -300,6 +316,11 @@ func (ch *Channel) HandleAudioSegment(b []byte, duration float64) error {
 	if _, err := ch.AudioFile.Write(b); err != nil {
 		return fmt.Errorf("write audio file: %w", err)
 	}
+
+	ch.stateMu.Lock()
+	ch.audioSegmentCount++
+	ch.stateMu.Unlock()
+
 	return nil
 }
 

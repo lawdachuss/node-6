@@ -43,6 +43,12 @@ func (ch *Channel) NextFile() error {
                 return err
         }
 
+        // Reset segment counters for the new file
+        ch.stateMu.Lock()
+        ch.videoSegmentCount = 0
+        ch.audioSegmentCount = 0
+        ch.stateMu.Unlock()
+
         // Increment the sequence number for the next file
         ch.Sequence++
         return nil

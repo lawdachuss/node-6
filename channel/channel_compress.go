@@ -243,9 +243,24 @@ func writeCombinedFragmentedMP4(w io.Writer, videoFile, audioFile *mp4.File, war
         // the original value from the source file.
         videoFragments := collectFragments(videoFile)
         audioFragments := collectFragments(audioFile)
-        if warn != nil && len(videoFragments) != len(audioFragments) {
-                warn(fmt.Sprintf("fragment count mismatch (video=%d, audio=%d); output may have track-solo tail segments", len(videoFragments), len(audioFragments)))
+
+        // Synchronize fragment counts by trimming to the shorter track.
+        // This prevents A/V drift caused by timing differences during live
+        // LL-HLS polling where one playlist may have a few extra segments.
+        originalVideoCount := len(videoFragments)
+        originalAudioCount := len(audioFragments)
+        if originalVideoCount != originalAudioCount {
+                minCount := originalVideoCount
+                if originalAudioCount < minCount {
+                        minCount = originalAudioCount
+                }
+                if warn != nil {
+                        warn(fmt.Sprintf("fragment count mismatch (video=%d, audio=%d); trimming to %d fragments for perfect sync", originalVideoCount, originalAudioCount, minCount))
+                }
+                videoFragments = videoFragments[:minCount]
+                audioFragments = audioFragments[:minCount]
         }
+
         segments, err := combineTrackFragments(videoFragments, videoTrex, audioFragments, audioTrex)
         if err != nil {
                 return err

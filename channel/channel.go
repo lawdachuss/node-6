@@ -59,10 +59,12 @@ type Channel struct {
 	AudioFile        *os.File
 	Config           *entity.ChannelConfig
 	CurrentFilename  string
-	InitSegment      []byte // fMP4 video init segment for LL-HLS streams
-	AudioInitSegment []byte // fMP4 audio init segment for LL-HLS streams
-	HasSeparateAudio bool
-	switchRequested  bool       // set by HandleSegment, consumed by OnPollComplete
+	InitSegment       []byte // fMP4 video init segment for LL-HLS streams
+	AudioInitSegment  []byte // fMP4 audio init segment for LL-HLS streams
+	HasSeparateAudio  bool
+	switchRequested   bool // set by HandleSegment, consumed by OnPollComplete
+	videoSegmentCount int  // tracks video segments written to current file
+	audioSegmentCount int  // tracks audio segments written to current file
 	cleanupMu        sync.Mutex // serialises Cleanup() calls from concurrent goroutines
 	pendingFiles     []pendingFile
 	UploadWg         sync.WaitGroup // tracks in-flight upload goroutines for graceful shutdown
