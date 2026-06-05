@@ -27,4 +27,5 @@ type IManager interface {
 	StartSession(duration time.Duration)
 	StartWatcher()
 	IsFileUploadInFlight(filePath string) bool
+	SessionInfo() (time.Duration, bool)
 }

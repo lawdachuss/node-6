@@ -342,10 +342,21 @@ type UploadLink struct {
         UploadedAt  string `json:"uploaded_at,omitempty"`
 }
 
-// SaveUploadLink creates a new upload link
+// SaveUploadLink creates or updates an upload link.
+// Uses on_conflict to atomically upsert by (recording_id, host), making
+// repeated calls idempotent and preventing duplicate rows.
 func (c *Client) SaveUploadLink(link *UploadLink) error {
-        var result []UploadLink
-        return c.post("/upload_links", link, &result)
+        resp, err := c.requestWithRetry("POST", "/upload_links?on_conflict=recording_id,host", link)
+        if err != nil {
+                return err
+        }
+        defer resp.Body.Close()
+
+        if resp.StatusCode >= 400 {
+                bodyBytes, _ := io.ReadAll(resp.Body)
+                return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+        }
+        return nil
 }
 
 // GetUploadLinks retrieves all upload links for a recording

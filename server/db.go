@@ -537,8 +537,10 @@ func SaveRecordingWithLinks(username, filename, timestamp, roomTitle string, tag
                 return fmt.Errorf("get recording after save: %w", err)
         }
 
-        // Save upload links (non-fatal per link)
-        var linkErrs []string
+        // Save upload links — fail the whole operation if any link fails.
+        // Partial saves silently lose data, so we treat a single link failure
+        // as a hard error and skip saving all remaining links.  The caller can
+        // retry from scratch on the next restart or iteration.
         for host, url := range links {
                 link := &database.UploadLink{
                         RecordingID: savedRec.ID,
@@ -546,12 +548,8 @@ func SaveRecordingWithLinks(username, filename, timestamp, roomTitle string, tag
                         URL:         url,
                 }
                 if err := client.SaveUploadLink(link); err != nil {
-                        linkErrs = append(linkErrs, fmt.Sprintf("%s: %v", host, err))
+                        return fmt.Errorf("save upload link %s: %w", host, err)
                 }
-        }
-
-        if len(linkErrs) > 0 {
-                fmt.Printf("[WARN] Failed to save some upload links: %s\n", strings.Join(linkErrs, "; "))
         }
 
         cacheClear()

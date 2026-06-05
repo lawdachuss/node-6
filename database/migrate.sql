@@ -84,6 +84,25 @@ CREATE INDEX IF NOT EXISTS idx_upload_links_recording_id ON upload_links(recordi
 CREATE INDEX IF NOT EXISTS idx_upload_links_host ON upload_links(host);
 CREATE INDEX IF NOT EXISTS idx_upload_links_instance ON upload_links(instance_id);
 
+-- Safe migration: remove duplicate rows (keep newest) then add unique constraint.
+-- Required for idempotent upsert via on_conflict=recording_id,host.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'upload_links_recording_host_unique'
+    ) THEN
+        -- Remove duplicates, keeping only the latest row per (recording_id, host)
+        DELETE FROM upload_links a
+        USING upload_links b
+        WHERE a.id < b.id
+          AND a.recording_id IS NOT DISTINCT FROM b.recording_id
+          AND a.host IS NOT DISTINCT FROM b.host;
+
+        -- Add the unique constraint
+        ALTER TABLE upload_links ADD CONSTRAINT upload_links_recording_host_unique UNIQUE (recording_id, host);
+    END IF;
+END $$;
+
 -- ============================================================================
 -- 4. APP_SETTINGS
 -- ============================================================================

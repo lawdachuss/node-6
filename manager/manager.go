@@ -81,6 +81,27 @@ type Manager struct {
 	// and the SIGTERM handler cannot panic on double-close.
 	watcherMu     sync.Mutex
 	watcherClosed bool
+
+	// sessionDeadline tracks when the current recording session will end
+	// (zero = no active session, recording or between cycles).
+	sessionDeadline   time.Time
+	sessionDeadlineMu sync.Mutex
+	sessionDuration   time.Duration
+}
+
+// SessionInfo returns the remaining recording time and whether a session
+// is currently active (recording phase, not processing phase).
+func (m *Manager) SessionInfo() (remaining time.Duration, active bool) {
+	m.sessionDeadlineMu.Lock()
+	defer m.sessionDeadlineMu.Unlock()
+	if m.sessionDeadline.IsZero() {
+		return 0, false
+	}
+	remaining = time.Until(m.sessionDeadline)
+	if remaining <= 0 {
+		return 0, false
+	}
+	return remaining, true
 }
 
 // New initializes a new Manager instance with an SSE server.
@@ -430,12 +451,21 @@ func (m *Manager) sessionLoop(d time.Duration) {
 	for {
 		channels := m.channelCount()
 		if channels == 0 {
+			m.sessionDeadlineMu.Lock()
+			m.sessionDeadline = time.Time{}
+			m.sessionDuration = 0
+			m.sessionDeadlineMu.Unlock()
 			log.Println("[session] no channels to record — stopping session loop")
 			return
 		}
 		log.Printf("[session] recording session started — next stop in %s with %d channel(s)", d, channels)
 
 		deadline := time.Now().Add(d)
+		m.sessionDeadlineMu.Lock()
+		m.sessionDeadline = deadline
+		m.sessionDuration = d
+		m.sessionDeadlineMu.Unlock()
+
 		timer := time.NewTimer(d)
 		progress := time.NewTicker(30 * time.Minute)
 
@@ -454,6 +484,11 @@ func (m *Manager) sessionLoop(d time.Duration) {
 		}
 
 		log.Println("[session] duration reached — stopping all channels")
+
+		m.sessionDeadlineMu.Lock()
+		m.sessionDeadline = time.Time{}
+		m.sessionDuration = 0
+		m.sessionDeadlineMu.Unlock()
 
 		m.CancelAllChannels()
 		m.StopWatcher()

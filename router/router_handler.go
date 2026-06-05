@@ -24,9 +24,11 @@ import (
 
 // IndexData represents the data structure for the index page.
 type IndexData struct {
-        Config   *entity.Config
-        Channels []*entity.ChannelInfo
-        Disk     *entity.DiskInfo
+	Config       *entity.Config
+	Channels     []*entity.ChannelInfo
+	Disk         *entity.DiskInfo
+	SessionDeadlineUnix int64 // Unix timestamp when current session ends; 0 = inactive
+	SessionDurationSec   int  // Total session duration in seconds
 }
 
 type hostPlayer struct {
@@ -39,11 +41,22 @@ type hostPlayer struct {
 // Index renders the index page with channel information.
 func Index(c *gin.Context) {
 	c.Header("Cache-Control", "public, max-age=30")
-        c.HTML(200, "index.html", &IndexData{
-                Config:   server.Config,
-                Channels: server.Manager.ChannelInfo(),
-                Disk:     server.GetDiskInfo(),
-        })
+
+	var deadlineUnix int64
+	var durSec int
+	remaining, active := server.Manager.SessionInfo()
+	if active {
+		deadlineUnix = time.Now().Add(remaining).Unix()
+		durSec = int(server.Config.SessionDurationParsed.Seconds())
+	}
+
+	c.HTML(200, "index.html", &IndexData{
+		Config:              server.Config,
+		Channels:            server.Manager.ChannelInfo(),
+		Disk:                server.GetDiskInfo(),
+		SessionDeadlineUnix: deadlineUnix,
+		SessionDurationSec:  durSec,
+	})
 }
 
 // CreateChannelRequest represents the request body for creating a channel.
