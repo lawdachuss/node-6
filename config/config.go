@@ -223,13 +223,8 @@ func New(c *cli.Context) (*entity.Config, error) {
 		SetFFmpegPath(path)
 	}
 
-	if dur := c.String("session-duration"); dur != "" {
-		cfg.SessionDuration = dur
-		d, err := time.ParseDuration(dur)
-		if err == nil && d > 0 {
-			cfg.SessionDurationParsed = d
-		}
-	}
+	cfg.SessionDuration = "5h20m0s"
+	cfg.SessionDurationParsed = 5*time.Hour + 20*time.Minute
 
 	return cfg, nil
 }
