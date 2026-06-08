@@ -108,7 +108,9 @@ func autoDetectFFmpeg() string {
 // "ffmpeg" as final fallback (which relies on PATH lookup by exec.Command).
 func ffmpegBin() string {
 	if ffmpegPath != "" {
-		return ffmpegPath
+		if _, err := os.Stat(ffmpegPath); err == nil {
+			return ffmpegPath
+		}
 	}
 	if p := autoDetectFFmpeg(); p != "" {
 		return p
@@ -116,22 +118,39 @@ func ffmpegBin() string {
 	return "ffmpeg"
 }
 
-// ffprobeBin returns the configured ffprobe path by deriving it from ffmpeg
-// path, or "ffprobe" (or "ffprobe.exe" on Windows) as fallback.
+// ffprobeBin returns a working ffprobe path, trying in order:
+//  1. Same directory as the configured ffmpeg path
+//  2. PATH lookup via LookPath
+//  3. Same directory as the auto-detected ffmpeg
+//  4. Bare name ("ffprobe"/"ffprobe.exe") as final fallback
 func ffprobeBin() string {
 	probeName := "ffprobe"
 	if runtime.GOOS == "windows" {
 		probeName = "ffprobe.exe"
 	}
+
 	if ffmpegPath != "" {
-		dir := filepath.Dir(ffmpegPath)
-		return filepath.Join(dir, probeName)
+		if _, err := os.Stat(ffmpegPath); err == nil {
+			dir := filepath.Dir(ffmpegPath)
+			p := filepath.Join(dir, probeName)
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
 	}
-	// If auto-detected, derive ffprobe from the same directory
+
+	if p, err := exec.LookPath(probeName); err == nil {
+		return p
+	}
+
 	if p := autoDetectFFmpeg(); p != "" {
 		dir := filepath.Dir(p)
-		return filepath.Join(dir, probeName)
+		probePath := filepath.Join(dir, probeName)
+		if _, err := os.Stat(probePath); err == nil {
+			return probePath
+		}
 	}
+
 	return probeName
 }
 
