@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/teacat/chaturbate-dvr/server"
@@ -15,9 +14,9 @@ import (
 // sharedTransport is a singleton http.RoundTripper reused across all channels.
 // It uses httpcloak's Chrome 146 Windows TLS/HTTP2 fingerprint to bypass
 // Cloudflare WAF TCP RST that Go's default crypto/tls triggers.
-var sharedTransport = sync.OnceValue(func() http.RoundTripper {
-	return sharedCloakTransport()
-})
+func sharedTransport() http.RoundTripper {
+	return getSharedTransport()
+}
 
 // WaitForChaturbateRateLimit blocks until a rate-limit slot is available.
 // Call this before every Chaturbate API request to avoid triggering

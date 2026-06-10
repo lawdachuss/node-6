@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,36 +20,80 @@ import (
 // TCP RST that Go's default crypto/tls triggers.
 // ECH (Encrypted Client Hello) hides the SNI from network observers for
 // better Cloudflare bot scores.
+//
+// When the SOCKS5 proxy is unreachable (i/o timeout, connection refused),
+// automatically rotates to the next proxy URL in the list. This handles
+// the case where free proxy servers are intermittently available.
 type httpcloakTransport struct {
-	client *httpcloak.Client
-	mu     sync.Mutex
+	mu        sync.Mutex
+	client    *httpcloak.Client
+	proxyURLs []string
+	proxyIdx  int
 }
 
-var sharedCloakTransport = sync.OnceValue(func() http.RoundTripper {
+// sharedTransportSingleton is a singleton http.RoundTripper for the shared transport.
+var sharedTransportSingleton http.RoundTripper
+var sharedTransportOnce sync.Once
+
+func getSharedTransport() http.RoundTripper {
+	sharedTransportOnce.Do(func() {
+		proxyURLs := configuredProxyURLs()
+		client := newCloakClient(proxyURLAt(proxyURLs, 0))
+		sharedTransportSingleton = &httpcloakTransport{
+			client:    client,
+			proxyURLs: proxyURLs,
+		}
+	})
+	return sharedTransportSingleton
+}
+
+func proxyURLAt(urls []string, idx int) string {
+	if len(urls) == 0 {
+		return ""
+	}
+	return urls[idx%len(urls)]
+}
+
+// newCloakClient creates a new httpcloak client with the given proxy URL.
+func newCloakClient(proxyURL string) *httpcloak.Client {
 	opts := []httpcloak.Option{
 		httpcloak.WithTimeout(120 * time.Second),
 	}
-	if proxyURL := configuredProxyURL(); proxyURL != "" {
+	if proxyURL != "" {
 		opts = append(opts, httpcloak.WithProxy(proxyURL))
 	}
-	c := httpcloak.New("chrome-146-windows", opts...)
-	return &httpcloakTransport{client: c}
-})
+	return httpcloak.New("chrome-146-windows", opts...)
+}
 
-func configuredProxyURL() string {
+// configuredProxyURLs returns all proxy URLs (supports comma-separated for failover).
+func configuredProxyURLs() []string {
 	if server.Config == nil {
-		return ""
+		return nil
 	}
-	proxyURL := strings.TrimSpace(server.Config.ProxyURL)
-	if proxyURL == "" {
-		return ""
+	raw := strings.TrimSpace(server.Config.ProxyURL)
+	if raw == "" {
+		return nil
 	}
+
 	username := strings.TrimSpace(server.Config.ProxyUsername)
 	password := strings.TrimSpace(server.Config.ProxyPassword)
+
+	var urls []string
+	for _, part := range strings.Split(raw, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		part = applyProxyAuth(part, username, password)
+		urls = append(urls, part)
+	}
+	return urls
+}
+
+func applyProxyAuth(proxyURL, username, password string) string {
 	if username == "" && password == "" {
 		return proxyURL
 	}
-
 	u, err := url.Parse(proxyURL)
 	if err != nil || u.Scheme == "" || u.Host == "" || u.User != nil {
 		return proxyURL
@@ -61,6 +106,28 @@ func configuredProxyURL() string {
 	return u.String()
 }
 
+// rotateProxy recreates the httpcloak client with the next proxy in the list.
+// Returns true if a different proxy was selected.
+func (t *httpcloakTransport) rotateProxy() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if len(t.proxyURLs) <= 1 {
+		return false
+	}
+
+	t.proxyIdx++
+	proxyURL := proxyURLAt(t.proxyURLs, t.proxyIdx)
+
+	// Close old client if it exposes a Close method
+	if c, ok := interface{}(t.client).(interface{ Close() error }); ok {
+		c.Close()
+	}
+
+	t.client = newCloakClient(proxyURL)
+	return true
+}
+
 // WarmupChaturbate makes an initial request to chaturbate.com to establish
 // TLS session tickets with Cloudflare before any API calls are made.
 // This gives subsequent requests TLS session resumption, making them look
@@ -71,7 +138,7 @@ func WarmupChaturbate(ctx context.Context) {
 		return
 	}
 	SetRequestHeaders(req)
-	resp, err := sharedCloakTransport().RoundTrip(req)
+	resp, err := getSharedTransport().RoundTrip(req)
 	if err != nil {
 		return
 	}
@@ -87,11 +154,25 @@ func WarmupStripchat(ctx context.Context) {
 		return
 	}
 	SetRequestHeaders(req)
-	resp, err := sharedCloakTransport().RoundTrip(req)
+	resp, err := getSharedTransport().RoundTrip(req)
 	if err != nil {
 		return
 	}
 	resp.Body.Close()
+}
+
+// isProxyError checks if an error is a proxy connection failure (SOCKS5 unreachable).
+// These errors trigger automatic proxy rotation.
+func isProxyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "SOCKS5 CONNECT failed") ||
+		strings.Contains(msg, "connect to SOCKS5 proxy") ||
+		strings.Contains(msg, "i/o timeout") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "no reachable proxy")
 }
 
 func (t *httpcloakTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -116,41 +197,62 @@ func (t *httpcloakTransport) RoundTrip(req *http.Request) (*http.Response, error
 		}
 	}
 
-	cloakReq := &httpcloak.Request{
-		Method:  req.Method,
-		URL:     req.URL.String(),
-		Headers: req.Header,
-	}
+	// Try up to len(proxyURLs) attempts, rotating proxy on connection failures.
+	for attempt := 0; attempt < max(1, len(t.proxyURLs)); attempt++ {
+		t.mu.Lock()
+		client := t.client
+		t.mu.Unlock()
 
-	if len(bodyBytes) > 0 {
-		cloakReq.Body = bytes.NewReader(bodyBytes)
-	}
+		cloakReq := &httpcloak.Request{
+			Method:  req.Method,
+			URL:     req.URL.String(),
+			Headers: req.Header,
+		}
+		if len(bodyBytes) > 0 {
+			cloakReq.Body = bytes.NewReader(bodyBytes)
+		}
 
-	cloakResp, err := t.client.Do(ctx, cloakReq)
-	if err != nil {
-		return nil, err
-	}
+		cloakResp, err := client.Do(ctx, cloakReq)
 
-	body, err := cloakResp.Bytes()
-	if err != nil {
-		cloakResp.Close()
-		return nil, err
-	}
+		if err == nil {
+			body, bodyErr := cloakResp.Bytes()
+			if bodyErr != nil {
+				cloakResp.Close()
+				return nil, bodyErr
+			}
 
-	resp := &http.Response{
-		StatusCode: cloakResp.StatusCode,
-		Header:     make(http.Header),
-		Body:       io.NopCloser(bytes.NewReader(body)),
-		Request:    req,
-	}
+			resp := &http.Response{
+				StatusCode: cloakResp.StatusCode,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(bytes.NewReader(body)),
+				Request:    req,
+			}
+			if cloakResp.Headers != nil {
+				for k, vs := range cloakResp.Headers {
+					for _, v := range vs {
+						resp.Header.Add(k, v)
+					}
+				}
+			}
+			return resp, nil
+		}
 
-	if cloakResp.Headers != nil {
-		for k, vs := range cloakResp.Headers {
-			for _, v := range vs {
-				resp.Header.Add(k, v)
+		// Proxy connection failure — rotate to next proxy in the list
+		if isProxyError(err) {
+			if t.rotateProxy() {
+				continue
 			}
 		}
+		return nil, err
 	}
 
-	return resp, nil
+	return nil, fmt.Errorf("all proxies failed")
+}
+
+// max returns the larger of a and b.
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
