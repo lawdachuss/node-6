@@ -334,18 +334,21 @@ func start(c *cli.Context) error {
 		fmt.Println()
 	}
 
-	// Warm up TLS sessions with Cloudflare before any API calls.
-	// This establishes TLS session tickets via HEAD requests to both chaturbate.com
-	// and stripchat.com, so subsequent API calls use TLS resumption (like a returning browser).
-	// Each domain gets its own 10s timeout so a dead proxy on one doesn't cascade delays.
-	warmupT := time.Now()
-	warmupCtx, warmupCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	internal.WarmupChaturbate(warmupCtx)
-	warmupCancel()
-	warmupCtx, warmupCancel = context.WithTimeout(context.Background(), 10*time.Second)
-	internal.WarmupStripchat(warmupCtx)
-	warmupCancel()
-	fmt.Printf("[startup] TLS warmup completed in %v\n", time.Since(warmupT).Round(time.Millisecond))
+	// Warm up TLS sessions with Cloudflare in the background so server
+	// startup is not delayed by slow/unreachable SOCKS5 proxies.
+	// The httpcloak pool-level dial doesn't propagate the context deadline
+	// during the SOCKS5 handshake, causing it to block for the OS TCP
+	// timeout (~30-120s) instead of the desired 10s context deadline.
+	go func() {
+		warmupT := time.Now()
+		warmupCtx, warmupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		internal.WarmupChaturbate(warmupCtx)
+		warmupCancel()
+		warmupCtx, warmupCancel = context.WithTimeout(context.Background(), 10*time.Second)
+		internal.WarmupStripchat(warmupCtx)
+		warmupCancel()
+		fmt.Printf("[startup] TLS warmup completed in %v\n", time.Since(warmupT).Round(time.Millisecond))
+	}()
 
 	server.Manager, err = manager.New()
 	if err != nil {

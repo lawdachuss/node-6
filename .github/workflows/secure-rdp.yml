@@ -485,10 +485,12 @@ jobs:
           Start-Sleep -Seconds 5
 
           # Wait for DVR to be fully ready on port 8080
+          # Increased from 60s to 180s to account for slow SOCKS5 proxy warmup
+          # where the httpcloak library can block for OS TCP timeout (~30-120s)
           Write-Host "=== Waiting for DVR to be ready ==="
           Write-Host "Waiting for DVR to listen on port 8080..."
           $dvrReady = $false
-          for ($i = 0; $i -lt 30; $i++) {
+          for ($i = 0; $i -lt 90; $i++) {
             # Check if wrapper script log exists
             if ($i -eq 5 -and (Test-Path "$repoDir\dvr-wrapper.log")) {
               Write-Host "=== DVR Wrapper Log (first 20 lines) ==="
@@ -503,22 +505,25 @@ jobs:
                 break
               }
             } catch {}
-            Write-Host "  Waiting... ($($i+1)/30)"
+            Write-Host "  Waiting... ($($i+1)/90)"
             Start-Sleep -Seconds 2
           }
           
           if (-not $dvrReady) {
-            Write-Error "DVR not detected on port 8080 after 60 seconds"
+            Write-Error "DVR not detected on port 8080 after 180 seconds"
             Write-Host ""
             Write-Host "=== Diagnostics ==="
+            [Console]::Out.Flush()
             
             Write-Host "Checking scheduled task status..."
             Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue | Select-Object TaskName, State, LastRunTime, LastTaskResult
             Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+            [Console]::Out.Flush()
             
             Write-Host ""
             Write-Host "Checking if DVR process is running..."
             Get-Process -Name "chaturbate-dvr","powershell" -ErrorAction SilentlyContinue | Format-Table
+            [Console]::Out.Flush()
             
             Write-Host ""
             Write-Host "Checking wrapper log..."
@@ -527,6 +532,7 @@ jobs:
             } else {
               Write-Host "Wrapper log not found at $repoDir\dvr-wrapper.log"
             }
+            [Console]::Out.Flush()
             
             Write-Host ""
             Write-Host "Checking DVR output log..."
@@ -535,6 +541,7 @@ jobs:
             } else {
               Write-Host "DVR output log not found at $repoDir\dvr-output.log"
             }
+            [Console]::Out.Flush()
 
             Write-Host ""
             Write-Host "Checking if binary exists..."
@@ -543,6 +550,7 @@ jobs:
             } else {
               Write-Host "[ERROR] Binary NOT found: $dvrExe"
             }
+            [Console]::Out.Flush()
             
             Write-Host ""
             Write-Host "Checking if .env exists..."
@@ -551,6 +559,7 @@ jobs:
             } else {
               Write-Host "[ERROR] .env NOT found: $repoDir\.env"
             }
+            [Console]::Out.Flush()
             
             exit 1
           }
