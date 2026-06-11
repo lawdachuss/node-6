@@ -53,7 +53,11 @@ def supabase_request(method, url, api_key, data=None):
         with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read()
             return json.loads(raw) if raw else None
-    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as e:
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode() if e.fp else ""
+        print(f"  [WARN] Supabase {method} HTTP {e.code}: {error_body[:300]}")
+        return None
+    except (urllib.error.URLError, TimeoutError) as e:
         print(f"  [WARN] Supabase {method} failed: {e}")
         return None
 
@@ -72,6 +76,22 @@ def parse_cookies(cookie_str):
 
 def join_cookies(cookie_dict):
     return "; ".join(f"{k}={v}" for k, v in cookie_dict.items())
+
+
+def cookies_to_playwright_format(cookie_str):
+    """Convert 'k=v; k2=v2' string to Playwright cookie dict list."""
+    cookies = []
+    for pair in cookie_str.split(";"):
+        pair = pair.strip()
+        if "=" in pair:
+            k, _, v = pair.partition("=")
+            cookies.append({
+                "name": k.strip(),
+                "value": v.strip(),
+                "domain": ".chaturbate.com",
+                "path": "/",
+            })
+    return cookies
 
 
 def main():
@@ -171,14 +191,15 @@ def main():
         session_kwargs["proxy"] = proxy
     if user_agent:
         session_kwargs["useragent"] = user_agent
+    if cookie_str:
+        session_kwargs["cookies"] = cookies_to_playwright_format(cookie_str)
 
     try:
         with StealthySession(**session_kwargs) as session:
             session.fetch(
                 "https://chaturbate.com",
-                cookies=cookie_str,
                 page_action=capture_cookies,
-                wait=3000,
+                wait=5000,
             )
     except Exception as e:
         print(f"  [WARN] Scrapling request failed: {e}")
@@ -210,14 +231,10 @@ def main():
     refreshed = bool(new_cf and new_cf != old_cf)
 
     print(f"  Refreshed: {refreshed}")
-    if refreshed and len(new_cf) > 10:
+    if new_cf and len(new_cf) > 10:
         print(f"  cf_clearance: ...{new_cf[-20:]}")
 
-    if not refreshed:
-        print("  [SKIP] cf_clearance unchanged — nothing to update")
-        return
-
-    # --- Write back to Supabase ---
+    # --- Write back to Supabase (always overwrite with latest) ---
     print("\n[4/4] Saving to Supabase...")
 
     settings_value = {
@@ -245,7 +262,8 @@ def save_to_supabase(rest, api_key, value, is_seed=False):
     patch_url = f"{rest}/app_settings?key=eq.dvr_settings"
     result = supabase_request("PATCH", patch_url, api_key, {"value": value})
 
-    if result is not None:
+    # PATCH returns [] when no row matched — that's NOT a successful update
+    if result is not None and result != []:
         label = "seeded" if is_seed else "saved"
         print(f"  [OK] Cookies {label} to Supabase")
     else:
