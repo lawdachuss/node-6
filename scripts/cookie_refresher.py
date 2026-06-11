@@ -1,29 +1,22 @@
 #!/usr/bin/env python3
 """Cookie Refresher for Chaturbate DVR.
 
-Reads current cookies from Supabase, uses Scrapling's StealthySession to
-bypass Cloudflare at chaturbate.com, gets a fresh cf_clearance, merges it
-with the existing sessionid/csrftoken, and writes the result back to Supabase.
+Reads current cookies from Supabase, tries to refresh cf_clearance using
+curl_cffi (browser TLS impersonation — no full browser needed), merges
+with existing sessionid/csrftoken, and writes back to Supabase.
+
+If refresh fails, existing cookies are kept (they usually remain valid).
 
 Usage: python scripts/cookie_refresher.py
 Requires .env with SUPABASE_URL, SUPABASE_API_KEY.
-ALL_PROXY env var is used automatically (set by workflow step).
 """
 
 import json
 import os
 import sys
-import threading
-import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-
-try:
-    from scrapling.fetchers import StealthySession
-except ImportError:
-    print("::warning::Scrapling not installed — skipping cookie refresh")
-    sys.exit(0)
 
 
 def load_dotenv(path=".env"):
@@ -79,20 +72,86 @@ def join_cookies(cookie_dict):
     return "; ".join(f"{k}={v}" for k, v in cookie_dict.items())
 
 
-def cookies_to_playwright_format(cookie_str):
-    """Convert 'k=v; k2=v2' string to Playwright cookie dict list."""
-    cookies = []
+def extract_single_cookie(cookie_str, name):
     for pair in cookie_str.split(";"):
         pair = pair.strip()
         if "=" in pair:
             k, _, v = pair.partition("=")
-            cookies.append({
-                "name": k.strip(),
-                "value": v.strip(),
-                "domain": ".chaturbate.com",
-                "path": "/",
-            })
-    return cookies
+            if k.strip() == name:
+                return v.strip()
+    return None
+
+
+def try_refresh_with_curl_cffi(user_agent, proxy=None):
+    """Try to get fresh cookies using curl_cffi (browser TLS impersonation).
+
+    Returns dict of new cookies, or empty dict on failure.
+    curl_cffi is lighter than a full browser and doesn't trigger Turnstile.
+    """
+    try:
+        from curl_cffi import requests as cffi_requests
+    except ImportError:
+        print("  [INFO] curl_cffi not available")
+        return {}
+
+    print("  Trying curl_cffi (browser TLS impersonation)...")
+
+    impersonate = "chrome124"
+    session_cookies = {}
+
+    # First: visit chaturbate.com to get initial cookies
+    try:
+        resp = cffi_requests.get(
+            "https://chaturbate.com",
+            impersonate=impersonate,
+            timeout=30,
+            proxies={"https": proxy, "http": proxy} if proxy else None,
+            headers={"User-Agent": user_agent} if user_agent else None,
+        )
+        print(f"  curl_cffi status: {resp.status_code}")
+
+        # Extract cookies from response
+        if hasattr(resp, "cookies"):
+            for name, value in resp.cookies.items():
+                session_cookies[name] = value
+                print(f"    Cookie: {name}={value[:20]}...")
+
+    except Exception as e:
+        print(f"  [WARN] curl_cffi request failed: {e}")
+        return {}
+
+    if not session_cookies:
+        print("  [INFO] No cookies from curl_cffi")
+        return {}
+
+    return session_cookies
+
+
+def save_to_supabase(rest, api_key, value, is_seed=False):
+    patch_url = f"{rest}/app_settings?key=eq.dvr_settings"
+    result = supabase_request("PATCH", patch_url, api_key, {"value": value})
+
+    if result is not None and result != []:
+        label = "seeded" if is_seed else "saved"
+        print(f"  [OK] Cookies {label} to Supabase")
+    else:
+        label = "seed" if is_seed else "save"
+        print(f"  Row may not exist, trying INSERT for {label}...")
+        result = supabase_request(
+            "POST",
+            f"{rest}/app_settings",
+            api_key,
+            {"key": "dvr_settings", "value": value},
+        )
+        if result is not None:
+            print(f"  [OK] Cookies {label}d into Supabase")
+        else:
+            print(f"  [ERROR] Failed to {label} cookies to Supabase")
+            if not is_seed:
+                sys.exit(1)
+
+    if is_seed and result is not None:
+        print("  Now proceeding to refresh cookies...")
 
 
 def main():
@@ -114,7 +173,7 @@ def main():
     get_url = f"{rest}/app_settings?key=eq.dvr_settings&select=value"
 
     # --- Load current cookies from Supabase ---
-    print("\n[1/4] Loading current cookies from Supabase...")
+    print("\n[1/3] Loading current cookies from Supabase...")
     settings = supabase_request("GET", get_url, supabase_key)
 
     cookie_str = ""
@@ -139,7 +198,6 @@ def main():
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/146.0.0.0 Safari/537.36",
                 )
-            # Save .env cookies to Supabase immediately so DVR can use them even if refresh fails
             seed_value = {
                 "cookies": cookie_str,
                 "user_agent": user_agent,
@@ -169,112 +227,46 @@ def main():
     print(f"  cf_clearance: {'[OK]' if 'cf_clearance' in old else '[NO]'}")
     print(f"  Proxy: {'[OK] ' + proxy if proxy else '[NO] (direct)'}")
 
-    # --- Launch Scrapling and visit chaturbate.com ---
-    print("\n[2/4] Launching browser with Cloudflare bypass...")
+    # --- Try to refresh cookies ---
+    print("\n[2/3] Refreshing cookies...")
 
-    new_browser_cookies = {}
+    new_cookies = try_refresh_with_curl_cffi(user_agent, proxy)
 
-    def capture_cookies(page):
-        cb = page.context.cookies()
-        for c in cb:
-            domain = c.get("domain", "")
-            if "chaturbate.com" in domain:
-                new_browser_cookies[c["name"]] = c["value"]
-
-    # NOTE: We do NOT pass the proxy to Scrapling.
-    # The SOCKS5 proxy is too slow for the full browser + Cloudflare challenge.
-    # cf_clearance is a Cloudflare cookie — it works from any IP.
-    # The proxy is only needed for the DVR to bypass geo-restrictions.
-    saved_proxy = os.environ.pop("ALL_PROXY", None)
-    saved_all = os.environ.pop("all_proxy", None)
-    saved_socks = os.environ.pop("SOCKS_PROXY", None)
-
-    session_kwargs = {
-        "headless": True,
-        "solve_cloudflare": True,
-        "timeout": 90000,
-        "block_webrtc": True,
-        "hide_canvas": True,
-        "network_idle": False,
-    }
-    if user_agent:
-        session_kwargs["useragent"] = user_agent
-    if cookie_str:
-        session_kwargs["cookies"] = cookies_to_playwright_format(cookie_str)
-
-    HARD_TIMEOUT = 120  # seconds — kill entire Scrapling if it hangs
-
-    def _run_scrapling(result_container):
-        try:
-            with StealthySession(**session_kwargs) as session:
-                session.fetch(
-                    "https://chaturbate.com",
-                    page_action=capture_cookies,
-                    wait=3000,
-                )
-            result_container["done"] = True
-        except Exception as e:
-            result_container["error"] = str(e)
-
-    max_retries = 2
-    for attempt in range(1, max_retries + 1):
-        result = {}
-        t = threading.Thread(target=_run_scrapling, args=(result,), daemon=True)
-        t.start()
-        t.join(timeout=HARD_TIMEOUT)
-        if t.is_alive():
-            print(f"  [WARN] Attempt {attempt}/{max_retries} timed out after {HARD_TIMEOUT}s — browser may be hung")
-        elif result.get("error"):
-            print(f"  [WARN] Attempt {attempt}/{max_retries} failed: {result['error']}")
-        else:
-            break  # success
-        if attempt < max_retries:
-            print(f"  Retrying in 5s...")
-            time.sleep(5)
-        else:
-            print(f"  [ERROR] All attempts failed")
-            # Restore proxy env vars
-            if saved_proxy: os.environ["ALL_PROXY"] = saved_proxy
-            if saved_all: os.environ["all_proxy"] = saved_all
-            if saved_socks: os.environ["SOCKS_PROXY"] = saved_socks
-            return
-
-    # Restore proxy env vars
-    if saved_proxy: os.environ["ALL_PROXY"] = saved_proxy
-    if saved_all: os.environ["all_proxy"] = saved_all
-    if saved_socks: os.environ["SOCKS_PROXY"] = saved_socks
-
-    if not new_browser_cookies:
-        print("  [WARN] No cookies returned from browser — keeping existing")
-        return
-
-    print(f"  Got {len(new_browser_cookies)} cookies from browser session")
-    print(f"  Fresh cf_clearance: {'[OK]' if 'cf_clearance' in new_browser_cookies else '[NO]'}")
-
-    # --- Merge cookies ---
-    print("\n[3/4] Merging cookies...")
+    # --- Merge and save ---
+    print("\n[3/3] Merging cookies...")
 
     merged = dict(old)
-    for key in ("cf_clearance", "__cf_bm", "__cfruid"):
-        if key in new_browser_cookies:
-            merged[key] = new_browser_cookies[key]
-    if "sessionid" in new_browser_cookies:
-        merged["sessionid"] = new_browser_cookies["sessionid"]
-    if "csrftoken" in new_browser_cookies:
-        merged["csrftoken"] = new_browser_cookies["csrftoken"]
+    refreshed = False
+
+    if new_cookies:
+        for key in ("cf_clearance", "__cf_bm", "__cfruid", "sessionid", "csrftoken"):
+            if key in new_cookies and new_cookies[key]:
+                old_val = merged.get(key, "")
+                new_val = new_cookies[key]
+                if new_val != old_val:
+                    merged[key] = new_val
+                    refreshed = True
+
+        old_cf = old.get("cf_clearance", "")
+        new_cf = merged.get("cf_clearance", "")
+        if new_cf and new_cf != old_cf:
+            print(f"  cf_clearance refreshed: ...{new_cf[-20:]}")
+        elif new_cf:
+            print(f"  cf_clearance unchanged (still valid)")
+        else:
+            print(f"  [INFO] No new cf_clearance from curl_cffi")
+    else:
+        print("  [INFO] Keeping existing cookies (no new cookies obtained)")
+
+    print(f"  Total cookies: {len(merged)}")
+    print(f"  sessionid: {'[OK]' if 'sessionid' in merged else '[NO]'}")
+    print(f"  csrftoken: {'[OK]' if 'csrftoken' in merged else '[NO]'}")
+    print(f"  cf_clearance: {'[OK]' if 'cf_clearance' in merged else '[NO]'}")
 
     new_cookie_str = join_cookies(merged)
 
-    old_cf = old.get("cf_clearance", "")
-    new_cf = merged.get("cf_clearance", "")
-    refreshed = bool(new_cf and new_cf != old_cf)
-
-    print(f"  Refreshed: {refreshed}")
-    if new_cf and len(new_cf) > 10:
-        print(f"  cf_clearance: ...{new_cf[-20:]}")
-
-    # --- Write back to Supabase (always overwrite with latest) ---
-    print("\n[4/4] Saving to Supabase...")
+    # --- Write back to Supabase ---
+    print("\nSaving to Supabase...")
 
     settings_value = {
         "cookies": new_cookie_str,
@@ -286,43 +278,10 @@ def main():
 
     save_to_supabase(rest, supabase_key, settings_value)
 
-
-def extract_single_cookie(cookie_str, name):
-    for pair in cookie_str.split(";"):
-        pair = pair.strip()
-        if "=" in pair:
-            k, _, v = pair.partition("=")
-            if k.strip() == name:
-                return v.strip()
-    return None
-
-
-def save_to_supabase(rest, api_key, value, is_seed=False):
-    patch_url = f"{rest}/app_settings?key=eq.dvr_settings"
-    result = supabase_request("PATCH", patch_url, api_key, {"value": value})
-
-    # PATCH returns [] when no row matched — that's NOT a successful update
-    if result is not None and result != []:
-        label = "seeded" if is_seed else "saved"
-        print(f"  [OK] Cookies {label} to Supabase")
+    if refreshed:
+        print("\n[OK] Cookies refreshed successfully")
     else:
-        label = "seed" if is_seed else "save"
-        print(f"  Row may not exist, trying INSERT for {label}...")
-        result = supabase_request(
-            "POST",
-            f"{rest}/app_settings",
-            api_key,
-            {"key": "dvr_settings", "value": value},
-        )
-        if result is not None:
-            print(f"  [OK] Cookies {label}d into Supabase")
-        else:
-            print(f"  [ERROR] Failed to {label} cookies to Supabase")
-            if not is_seed:
-                sys.exit(1)
-
-    if is_seed and result is not None:
-        print("  Now proceeding to refresh cf_clearance via Scrapling...")
+        print("\n[OK] Cookies preserved (existing values)")
 
 
 if __name__ == "__main__":

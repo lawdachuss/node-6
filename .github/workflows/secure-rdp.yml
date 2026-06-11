@@ -294,21 +294,13 @@ jobs:
             Write-Warning "PySocks download failed - pip may have SOCKS issues"
           }
           # ALL_PROXY stays set - but exclude PyPI from proxy (unreliable over SOCKS5)
-          Write-Host "Installing Scrapling..."
+          Write-Host "Installing curl_cffi for cookie refresh (lightweight, no browser needed)..."
           $env:NO_PROXY = "pypi.org,files.pythonhosted.org,*.pythonhosted.org"
           $env:no_proxy = "pypi.org,files.pythonhosted.org,*.pythonhosted.org"
-          pip install --default-timeout=120 "scrapling[fetchers]"
+          pip install --default-timeout=60 curl_cffi
           Remove-Item Env:NO_PROXY -ErrorAction SilentlyContinue
           Remove-Item Env:no_proxy -ErrorAction SilentlyContinue
-          if ($LASTEXITCODE -ne 0) { Write-Warning "Scrapling install failed, skipping cookie refresh"; $skipRefresh = $true }
-          if (-not $skipRefresh) {
-            Write-Host "Installing browser dependencies..."
-            # Node.js can't handle socks5:// - bypass proxy for CDN download only
-            $env:NO_PROXY = "*"
-            python -m playwright install chromium
-            Remove-Item Env:NO_PROXY -ErrorAction SilentlyContinue
-            if ($LASTEXITCODE -ne 0) { Write-Warning "Browser install failed, skipping cookie refresh"; $skipRefresh = $true }
-          }
+          if ($LASTEXITCODE -ne 0) { Write-Warning "curl_cffi install failed, skipping cookie refresh"; $skipRefresh = $true }
           if (-not $skipRefresh) {
             Write-Host "Running cookie refresher..."
             Set-Location $repoDir
