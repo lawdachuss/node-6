@@ -862,17 +862,22 @@ func DeleteVideoCompletely(filename string) error {
 	return nil
 }
 
-// DeleteShortVideos finds all recordings with duration <= maxDuration seconds and
-// deletes them from the database (recording, upload_links, preview_images).
+// DeleteShortVideos finds all recordings with duration < MinDurationBeforeUpload
+// and deletes them from the database (recording, upload_links, preview_images).
 // If deleteLocal is true, also removes the local file from disk.
 // Returns the count of deleted recordings and a list of deleted filenames.
-func DeleteShortVideos(maxDuration float64, deleteLocal bool) (int, []string, error) {
+func DeleteShortVideos(deleteLocal bool) (int, []string, error) {
 	client := GetDBClient()
 	if client == nil {
 		return 0, nil, fmt.Errorf("Supabase not configured")
 	}
 
-	recordings, err := client.GetRecordingsByMaxDuration(maxDuration)
+	minDur := 1200 // default 20 min
+	if Config != nil && Config.MinDurationBeforeUpload > 0 {
+		minDur = Config.MinDurationBeforeUpload
+	}
+
+	recordings, err := client.GetRecordingsByMaxDuration(float64(minDur))
 	if err != nil {
 		return 0, nil, fmt.Errorf("query short videos: %w", err)
 	}
