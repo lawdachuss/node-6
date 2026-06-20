@@ -39,6 +39,7 @@ func (c *Coordinator) StartLiveCheckLoop(ctx context.Context) {
 }
 
 // runLiveCheck checks all channels in the pool and updates their is_live status.
+// Reads directly from channel_assignments (the source of truth in pooled mode).
 func (c *Coordinator) runLiveCheck() {
 	if c.LiveCheck == nil {
 		return
@@ -46,26 +47,18 @@ func (c *Coordinator) runLiveCheck() {
 
 	ctx := context.Background()
 
-	// Read the full pool
-	poolData, err := c.Client.LoadPoolFromDB()
-	if err != nil || poolData == nil {
-		return
-	}
-
-	pool, err := UnmarshalPool(poolData)
-	if err != nil || len(pool) == 0 {
+	// Read all channel assignments — this is the source of truth, not the
+	// channel_pool app_settings blob (which is never written in pooled mode).
+	assignments, err := c.Client.GetAllAssignments()
+	if err != nil || len(assignments) == 0 {
 		return
 	}
 
 	// Check liveness for each channel
 	var liveUsernames []string
-	for _, ch := range pool {
-		if ch.IsPaused.Load() {
-			continue
-		}
-
-		if c.LiveCheck.IsLive(ctx, ch.Site, ch.Username) {
-			liveUsernames = append(liveUsernames, ch.Username)
+	for _, ca := range assignments {
+		if c.LiveCheck.IsLive(ctx, ca.Site, ca.Username) {
+			liveUsernames = append(liveUsernames, ca.Username)
 		}
 	}
 

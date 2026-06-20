@@ -821,7 +821,7 @@ func (c *Client) GetDeadNodes(timeout time.Duration) ([]string, error) {
 type ChannelAssignment struct {
 	Username    string `json:"username"`
 	Site        string `json:"site"`
-	AssignedNode string `json:"assigned_node"`
+	AssignedNode string `json:"assigned_node,omitempty"`
 	Status      string `json:"status"`
 	IsLive      bool   `json:"is_live"`
 	LiveCheckedAt string `json:"live_checked_at,omitempty"`
@@ -973,6 +973,38 @@ func (c *Client) ReleaseChannel(username, site string) error {
 			"assigned_node": nil,
 			"status":        "unassigned",
 		})
+}
+
+// RepairOrphanedAssignments fixes rows where assigned_node is set but
+// status is still 'unassigned'. This can happen if a claim was partially
+// rolled back (assigned_node written, status not updated) or if a
+// release set status=unassigned without nulling assigned_node. These rows
+// are invisible to both ClaimChannels (which requires assigned_node IS NULL)
+// and ReleaseExcessChannels (which requires status != unassigned), causing
+// a permanent deadlock.
+//
+// Returns the number of rows repaired.
+func (c *Client) RepairOrphanedAssignments() (int, error) {
+	// Step 1: count the broken rows
+	var orphaned []ChannelAssignment
+	err := c.get("/channel_assignments?assigned_node=not.is.null&status=eq.unassigned&select=username&limit=50000", &orphaned)
+	if err != nil {
+		return 0, err
+	}
+	if len(orphaned) == 0 {
+		return 0, nil
+	}
+
+	// Step 2: null out assigned_node on all broken rows
+	err = c.patch("/channel_assignments?assigned_node=not.is.null&status=eq.unassigned",
+		map[string]interface{}{
+			"assigned_node": nil,
+		})
+	if err != nil {
+		return 0, err
+	}
+
+	return len(orphaned), nil
 }
 
 // DeleteAssignment removes a channel assignment entirely from the pool.

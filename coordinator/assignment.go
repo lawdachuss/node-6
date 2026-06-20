@@ -3,6 +3,7 @@ package coordinator
 import (
 	"context"
 	"encoding/json"
+	"hash/fnv"
 	"log"
 	"math"
 	"strings"
@@ -23,8 +24,13 @@ func (c *Coordinator) StartClaimLoop(ctx context.Context) {
 	go func() {
 		defer c.wg.Done()
 
-		// Small initial delay to let the node register first
-		time.Sleep(5 * time.Second)
+		// Stagger initial delay by node-ID hash so nodes don't all
+		// claim on the same cycle and race for the same channels.
+		// Base delay 5s + up to 10s spread.
+		h := fnv.New32a()
+		h.Write([]byte(c.NodeID))
+		stagger := 5*time.Second + time.Duration(h.Sum32()%10)*time.Second
+		time.Sleep(stagger)
 
 		ticker := time.NewTicker(60 * time.Second)
 		defer ticker.Stop()
@@ -57,6 +63,14 @@ func (c *Coordinator) ReleaseChannel(username, site string) {
 // Claims channels if this node has less than its fair share, releases channels
 // if it has more than its fair share (only when multiple nodes are alive).
 func (c *Coordinator) runClaimCycle() {
+	// Self-heal: repair rows stuck with assigned_node set but status=unassigned.
+	// These rows are invisible to both claim and release, causing a deadlock.
+	if repaired, err := c.Client.RepairOrphanedAssignments(); err != nil {
+		log.Printf("[coordinator] claim cycle: repair orphaned error: %v", err)
+	} else if repaired > 0 {
+		log.Printf("[coordinator] repaired %d orphaned assignment(s) (assigned_node set but status=unassigned)", repaired)
+	}
+
 	stats, err := c.Client.GetAssignmentStats()
 	if err != nil {
 		log.Printf("[coordinator] claim cycle: get stats error: %v", err)
