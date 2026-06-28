@@ -439,6 +439,62 @@ VALUES ('__healthcheck__', '{"status": "ok"}'::jsonb)
 ON CONFLICT (key) DO NOTHING;
 
 -- ============================================================================
+-- 13. ATOMIC CHANNEL CLAIMING (RPC FUNCTIONS)
+-- ============================================================================
+
+-- claim_channels: atomically claims up to p_limit unassigned channels for a node.
+-- Uses SELECT ... FOR UPDATE SKIP LOCKED so two concurrent callers never claim
+-- the same row — the standard PostgreSQL work-queue pattern.
+CREATE OR REPLACE FUNCTION claim_channels(p_node_id TEXT, p_limit INT)
+RETURNS SETOF channel_assignments
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  WITH candidates AS (
+    SELECT username, site
+    FROM channel_assignments
+    WHERE assigned_node IS NULL AND status = 'unassigned'
+    ORDER BY username ASC
+    LIMIT p_limit
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE channel_assignments ca
+  SET assigned_node  = p_node_id,
+      status         = 'claimed',
+      assigned_at    = NOW(),
+      last_heartbeat = NOW()
+  FROM candidates c
+  WHERE ca.username = c.username AND ca.site = c.site
+  RETURNING ca.*;
+END;
+$$;
+
+-- claim_specific_channel: atomically claims one specific channel for a node.
+-- Returns the claimed row if successful, empty set if already taken.
+CREATE OR REPLACE FUNCTION claim_specific_channel(p_username TEXT, p_site TEXT, p_node_id TEXT)
+RETURNS SETOF channel_assignments
+LANGUAGE plpgsql AS $$
+BEGIN
+  RETURN QUERY
+  WITH candidate AS (
+    SELECT username, site
+    FROM channel_assignments
+    WHERE username = p_username AND site = p_site
+      AND assigned_node IS NULL AND status = 'unassigned'
+    FOR UPDATE SKIP LOCKED
+  )
+  UPDATE channel_assignments ca
+  SET assigned_node  = p_node_id,
+      status         = 'claimed',
+      assigned_at    = NOW(),
+      last_heartbeat = NOW()
+  FROM candidate c
+  WHERE ca.username = c.username AND ca.site = c.site
+  RETURNING ca.*;
+END;
+$$;
+
+-- ============================================================================
 -- PERMISSIONS
 -- ============================================================================
 GRANT USAGE ON SCHEMA public TO anon;
@@ -460,6 +516,8 @@ ALTER TABLE public.nodes OWNER TO anon;
 ALTER TABLE public.channel_assignments OWNER TO anon;
 
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon;
+GRANT EXECUTE ON FUNCTION claim_channels(TEXT, INT) TO anon;
+GRANT EXECUTE ON FUNCTION claim_specific_channel(TEXT, TEXT, TEXT) TO anon;
 
 GRANT SELECT ON public.recordings_with_links TO anon;
 GRANT SELECT ON public.channel_statistics TO anon;

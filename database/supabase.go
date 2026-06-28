@@ -867,26 +867,16 @@ type AssignmentStats struct {
 }
 
 // ClaimChannels atomically claims up to `limit` unassigned channels for this node.
+// Uses a PostgreSQL RPC function with SELECT ... FOR UPDATE SKIP LOCKED to prevent
+// two nodes from claiming the same channel concurrently.
 // Returns the rows that were successfully claimed (empty slice if none available).
 func (c *Client) ClaimChannels(nodeID string, limit int) ([]ChannelAssignment, error) {
-	now := time.Now().UTC().Format(time.RFC3339)
 	body := map[string]interface{}{
-		"assigned_node":  nodeID,
-		"status":         "claimed",
-		"assigned_at":    now,
-		"last_heartbeat": now,
+		"p_node_id": nodeID,
+		"p_limit":   limit,
 	}
 
-	// Claim any unassigned channel regardless of current is_live status.  The
-	// claimed channel is watched by the manager and recorded when it actually
-	// goes live; filtering to is_live=true here would starve claims whenever the
-	// liveness check hasn't run yet (it updates is_live only every ~120s), and
-	// would prevent a node from ever picking up a channel that's offline at claim
-	// time but starts broadcasting later.  Fair-share still prefers releasing
-	// offline channels first (see ReleaseExcessChannels).
-	resp, err := c.requestWithRetry("PATCH",
-		fmt.Sprintf("/channel_assignments?assigned_node=is.null&status=eq.unassigned&order=username.asc&limit=%d", limit),
-		body)
+	resp, err := c.requestWithRetry("POST", "/rpc/claim_channels", body)
 	if err != nil {
 		return nil, err
 	}
@@ -905,20 +895,17 @@ func (c *Client) ClaimChannels(nodeID string, limit int) ([]ChannelAssignment, e
 }
 
 // ClaimSpecificChannel atomically claims one specific channel for this node.
+// Uses a PostgreSQL RPC function with SELECT ... FOR UPDATE SKIP LOCKED to prevent
+// two nodes from claiming the same channel concurrently.
 // Returns true if the channel was successfully claimed, false if it was already taken.
 func (c *Client) ClaimSpecificChannel(username, site, nodeID string) (bool, error) {
-	now := time.Now().UTC().Format(time.RFC3339)
 	body := map[string]interface{}{
-		"assigned_node":  nodeID,
-		"status":         "claimed",
-		"assigned_at":    now,
-		"last_heartbeat": now,
+		"p_username": username,
+		"p_site":     site,
+		"p_node_id":  nodeID,
 	}
 
-	resp, err := c.requestWithRetry("PATCH",
-		fmt.Sprintf("/channel_assignments?username=eq.%s&site=eq.%s&assigned_node=is.null&status=eq.unassigned",
-			url.QueryEscape(username), url.QueryEscape(site)),
-		body)
+	resp, err := c.requestWithRetry("POST", "/rpc/claim_specific_channel", body)
 	if err != nil {
 		return false, err
 	}
