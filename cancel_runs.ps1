@@ -1,4 +1,5 @@
 param()
+Write-Host "=== Cancelling active workflows ==="
 foreach ($r in 1..10) {
     $repo = "lawdachuss/node-$r"
     $json = gh run list --repo $repo --limit 50 --json databaseId,status --jq ".[]" 2>$null
@@ -11,10 +12,19 @@ foreach ($r in 1..10) {
                 $count++
             }
         }
+        Start-Sleep -Seconds 2
     }
     if ($count -gt 0) {
         Write-Host ("node-${r}: cancelled $count run(s)")
     } else {
         Write-Host ("node-${r}: no active runs")
     }
+}
+
+Write-Host ""
+Write-Host "=== Triggering fresh workflows ==="
+foreach ($r in 1..10) {
+    $repo = "lawdachuss/node-$r"
+    $url = gh workflow run secure-rdp.yml --repo $repo 2>$null
+    Write-Host ("node-${r}: triggered → $url")
 }
