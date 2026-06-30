@@ -108,6 +108,13 @@ jobs:
             return $null
           }
 
+          function Test-ProxyJob {
+            param($proxyUrl)
+            $result = Test-Proxy $proxyUrl
+            if ($result) { return @{url=$proxyUrl; ip=$result} }
+            return $null
+          }
+
           log "=== Fetching live SOCKS5 proxies ==="
           $allProxies = @()
 
@@ -149,39 +156,57 @@ jobs:
             )
           }
 
-          $maxProxies = 1
+          $maxProxies = 5
           $workingProxies = @()
           $fallbackProxies = @()
-          $tested = 0
-          $lastLogAt = 0
 
           log ""
-          log "=== Testing proxies (collecting $maxProxies working NL/IN proxies) ==="
-          $proxyTestDeadline = [datetime]::UtcNow.AddSeconds(90)
-          foreach ($p in $allProxies) {
-            if ([datetime]::UtcNow -gt $proxyTestDeadline) { log "TIMEOUT: proxy search exceeded 90s limit"; break }
-            if ($workingProxies.Count -ge $maxProxies) { break }
-            $tested++
-            if ($tested -ge $lastLogAt + 100) {
-              log "  Tested $tested/$($allProxies.Count) proxies... ($($workingProxies.Count) working so far)"
-              $lastLogAt = $tested
-            }
-            $ip = Test-Proxy $p
-            if (-not $ip) { continue }
-
+          log "=== Testing ALL $($allProxies.Count) proxies in parallel ==="
+          # Invoke-RestMethod for each proxy in parallel via PowerShell jobs
+          $allWorking = [System.Collections.ArrayList]@()
+          $testBlock = {
+            param($url)
             try {
-              $locRaw = curl.exe -x $p -s -m 5 https://ipinfo.io/json 2>$null
+              $ip = curl.exe -x $url -s --connect-timeout 2 -m 3 https://api.ipify.org 2>$null
+              if ($ip -notmatch '^\d+\.\d+\.\d+\.\d+$') { return $null }
+              # Check chaturbate: follow redirects, reject if face ID/verification page
+              $cbOut = curl.exe -x $url -s -o NUL -w "%{http_code} %{url_effective}" -L --connect-timeout 2 -m 4 https://chaturbate.com 2>$null
+              $code, $finalUrl = $cbOut -split ' ', 2
+              if ($code -ne "200") { return $null }
+              if ($finalUrl -match '(?i)(verify|auth|captcha|face|human|robot)') { return $null }
+              return @{url=$url; ip=$ip.Trim()}
+            } catch { return $null }
+          }
+          # Launch test in batches of 20 to avoid process thrash
+          for ($i = 0; $i -lt $allProxies.Count; $i += 20) {
+            $batch = $allProxies[$i..([math]::Min($i+19, $allProxies.Count-1))]
+            $jobs = @($batch | ForEach-Object { Start-Job -ScriptBlock $testBlock -ArgumentList $_ })
+            $null = $jobs | Wait-Job -Timeout 5 -ErrorAction SilentlyContinue
+            foreach ($j in $jobs) {
+              $r = Receive-Job $j -ErrorAction SilentlyContinue
+              if ($r -and $r.url) { [void]$allWorking.Add($r) }
+              Remove-Job $j -Force -ErrorAction SilentlyContinue
+            }
+            log "  Batch $([math]::Floor($i/20)+1): $($allWorking.Count) working so far"
+          }
+          log "  Tests complete, found $($allWorking.Count) working proxies"
+
+          $maxProxies = [math]::Min(5, $allWorking.Count)
+          foreach ($w in $allWorking) {
+            if ($workingProxies.Count -ge $maxProxies) { break }
+            try {
+              $locRaw = curl.exe -x $w.url -s --connect-timeout 2 -m 3 https://ipinfo.io/json 2>$null
               if ($locRaw) {
                 $loc = $locRaw | ConvertFrom-Json -ErrorAction Stop
                 $country = $loc.country
                 if ($country -eq "NL" -or $country -eq "IN") {
-                  $workingProxies += @{ url = $p; ip = $ip; country = $country; org = $loc.org }
-                  log "WORKING #$($workingProxies.Count): $p (IP: $ip / $country - $($loc.org))"
+                  $workingProxies += @{ url = $w.url; ip = $w.ip; country = $country; org = $loc.org }
+                  log "WORKING #$($workingProxies.Count): $($w.url) (IP: $($w.ip) / $country - $($loc.org))"
                 }
               }
             } catch {}
             if ($fallbackProxies.Count -eq 0) {
-              $fallbackProxies += @{ url = $p; ip = $ip }
+              $fallbackProxies += @{ url = $w.url; ip = $w.ip }
             }
           }
 
